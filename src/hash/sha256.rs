@@ -1,6 +1,9 @@
 #![allow(non_snake_case)]
 use std::collections::HashMap;
 
+use bitcoin::opcodes::all::OP_TOALTSTACK;
+use bitcoin::script::scriptint_vec;
+
 use crate::treepp::{pushable, script, Script};
 use crate::u32::u32_std::{u32_equalverify, u32_roll};
 use crate::u32::{
@@ -150,6 +153,31 @@ pub fn initial_message(message: &mut [u32;16]) -> Vec<Script> {
     //SHA256 is big-endian. Let m0 be topper.
     message.reverse();
     message.iter().map(|x| u32_push(*x)).collect::<Vec<_>>()
+}
+
+pub fn push_u8_to_mainstack(message: &mut [u8]) -> Script {
+    message.reverse();
+    script! {
+        for i in (0..message.len()).step_by(4) {
+            { message[i+3] }
+            { message[i+2] }
+            { message[i+1] }
+            { message[i] }
+        }
+    }
+}
+
+pub fn push_u8_to_altstack(message: &mut [u8]) -> Script {
+    message.reverse();
+    script! {
+        for i in (0..message.len()).step_by(4) {
+            { message[i+3] }
+            { message[i+2] }
+            { message[i+1] }
+            { message[i] }
+            {u32_toaltstack()}
+        }
+    }
 }
 
 pub fn push_K32() -> Vec<Script> {
@@ -709,12 +737,64 @@ pub fn push_sha256_bytes_hex(hex: &str) -> Script {
     }
 }
 
+// follow this [padding algorithm](https://github.com/TheAlgorithms/Rust/blob/master/src/ciphers/sha256.rs#L165C13-L179C50)
+pub fn pad(message: Vec<u8>) -> Vec<u8> { 
+    let message_bit_len = message.len() * 8;
+    let mut result = message.clone();
+    let clen = (message_bit_len + 8) & 511;
+    let num_0 = match clen.cmp(&448) {
+        std::cmp::Ordering::Greater => (448 + 512 - clen) >> 3,
+        _ => (448 - clen) >> 3,
+    };
+    let mut padding: Vec<u8> = vec![0_u8; (num_0 + 9) as usize];
+    let len = padding.len();
+    padding[0] = 0x80;
+    padding[len - 8] = (message_bit_len >> 56) as u8;
+    padding[len - 7] = (message_bit_len >> 48) as u8;
+    padding[len - 6] = (message_bit_len >> 40) as u8;
+    padding[len - 5] = (message_bit_len >> 32) as u8;
+    padding[len - 4] = (message_bit_len >> 24) as u8;
+    padding[len - 3] = (message_bit_len >> 16) as u8;
+    padding[len - 2] = (message_bit_len >> 8) as u8;
+    padding[len - 1] = message_bit_len as u8;
+    
+    result.extend(padding);
+    result
+}
+
 #[cfg(test)]
 mod tests {
     use crate::hash::sha256::*;
 
     use crate::treepp::{execute_script, script};
 
+    #[test]
+    fn test_pad() {
+        //let hex_out = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+        let out:[u32;8] = [
+            0xb94d27b9, 0x934d3e08, 0xa52e52d7, 0xda7dabfa, // 4
+            0xc484efe3, 0x7a5380ee, 0x9088f7ac, 0xe2efcde9, // 8
+        ];
+
+        let s = String::from("hello world");
+        let input = s.into_bytes();
+
+        let mut message = pad(input);
+        let msg_len = message.len() * 8; // multiply 8 for is u8 vector
+        assert_eq!( msg_len % 512, 0);
+        let script = script! {
+            {push_u8_to_mainstack(&mut message[0..64])}
+            {push_u8_to_altstack(&mut message[64..])}
+            sha256
+            for i in 0..8{
+                {u32_push(out[i])}
+                {u32_equalverify()}
+            }
+            OP_TRUE
+        };
+        let res = execute_script(script);
+        assert!(res.success);
+    }
     #[test]
     fn test_sha256_helloworld() {
         //let hex_out = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
