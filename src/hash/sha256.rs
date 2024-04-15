@@ -661,7 +661,7 @@ fn save_wi16(env: &mut Env, i16: u32, m: Ptr, delta: u32) -> Script {
 }
 
 /// SHA256 taking a 64-byte padded message and returning a 32-byte digest
-pub fn sha256() -> Script {
+pub fn sha256(chunk_size: u32) -> Script {
     let mut env = ptr_init();
     let script = script! {
         // Initialize K32 const
@@ -677,6 +677,11 @@ pub fn sha256() -> Script {
 
         // Perform a round of SHA256
         {compress(&mut env, INITIAL_STATE_SIZE)}
+
+        for _ in 1..chunk_size{
+            // Perform a round of SHA256
+            {compress(&mut env, INITIAL_STATE_SIZE)}
+        }
 
         // Save the hash
         for _ in 0..8{
@@ -782,10 +787,11 @@ mod tests {
         let mut message = pad(input);
         let msg_len = message.len() * 8; // multiply 8 for is u8 vector
         assert_eq!( msg_len % 512, 0);
+        let chunk_size = (msg_len / 512) as u32;
         let script = script! {
             {push_u8_to_mainstack(&mut message[0..64])}
             {push_u8_to_altstack(&mut message[64..])}
-            sha256
+            {sha256(chunk_size)}
             for i in 0..8{
                 {u32_push(out[i])}
                 {u32_equalverify()}
@@ -795,6 +801,7 @@ mod tests {
         let res = execute_script(script);
         assert!(res.success);
     }
+
     #[test]
     fn test_sha256_helloworld() {
         //let hex_out = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
@@ -813,10 +820,12 @@ mod tests {
         0, 0,
         0, 0x58,
         ];
-        
+        let msg_len = message.len() * 32; // multiply 32 for is u32 vector
+        assert_eq!( msg_len % 512, 0);
+        let chunk_size = (msg_len / 512) as u32;
         let script = script! {
             {initial_message(&mut message)}
-            sha256
+            {sha256(chunk_size)}
             for i in 0..8{
                 {u32_push(out[i])}
                 {u32_equalverify()}
@@ -839,10 +848,12 @@ mod tests {
         [0x8000_0000, 0, 0, 0, 0, 0, 0, 0,
             0,        0, 0, 0, 0, 0, 0, 0,
         ];
-        
+        let msg_len = message.len() * 32; // multiply 32 for is u32 vector
+        assert_eq!( msg_len % 512, 0);
+        let chunk_size = (msg_len / 512) as u32;
         let script = script! {
             {initial_message(&mut message)}
-            sha256
+            {sha256(chunk_size)}
             for i in 0..8{
                 {u32_push(out[i])}
                 {u32_equalverify()}
