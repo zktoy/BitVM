@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use crate::u32::u32_zip::{u32_copy_zip, u32_zip};
+use crate::u32::u32_zip::{u32_copy_zip};
 use crate::treepp::{pushable, script, Script};
 
 /// The bitwise AND of two u8 elements.

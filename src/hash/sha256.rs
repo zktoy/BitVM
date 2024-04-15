@@ -1,9 +1,6 @@
 #![allow(non_snake_case)]
 use std::collections::HashMap;
 
-use bitcoin::opcodes::all::OP_TOALTSTACK;
-use bitcoin::script::scriptint_vec;
-
 use crate::treepp::{pushable, script, Script};
 use crate::u32::u32_std::{u32_equalverify, u32_roll};
 use crate::u32::{
@@ -272,7 +269,6 @@ fn BIG_S1(env: &mut Env, ap: u32, e: Ptr, delta: u32) -> Script {
         {u32_drop()}
 
     };
-    println!("ZYD env: {:?}, ap: {:?}, n:{:?}", env, ap, n);
     script
 }
 
@@ -672,19 +668,6 @@ fn save_wi16_swap(env: &mut Env, m: Ptr, delta: u32) -> Script {
     script
 }
 
-// TODO. Try to use env, instead of save_wi16_swap.
-fn save_wi16(env: &mut Env, i16: u32, m: Ptr, delta: u32) -> Script {
-    let script = script!(
-        {u32_toaltstack()}
-        {u32_roll(env.ptr_extract(m))}
-        {u32_drop()}
-        {u32_fromaltstack()}
-    );
-    //env.ptr_extract(m);
-    env.ptr_insert(m);
-    script
-}
-
 /// SHA256 taking a 64-byte padded message and returning a 32-byte digest
 pub fn sha256(chunk_size: u32, message: &mut [u8]) -> Script {
     let mut env = ptr_init();
@@ -833,67 +816,42 @@ pub fn pad(message: Vec<u8>) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Mutex;
-
     use crate::hash::sha256::*;
 
     use crate::treepp::{execute_script, script};
+    use sha2::{Sha256, Digest};
 
     #[test]
-    fn test_pad() {
-        //let hex_out = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
-        let out:[u32;8] = [
-            0xb94d27b9, 0x934d3e08, 0xa52e52d7, 0xda7dabfa, // 4
-            0xc484efe3, 0x7a5380ee, 0x9088f7ac, 0xe2efcde9, // 8
-        ];
-
+    fn test_sha256() {
+        //2 block size
         let s = String::from("hello world hello world hello world hello world hello world");
+        //1 block size
         //let s = String::from("hello world");
+        
+        let mut hasher = Sha256::new();
+        hasher.update(s.clone());
+        // Note that calling `finalize()` consumes hasher
+        let expected_hash = hasher.finalize();
+        println!("Expected hash: {:x}", expected_hash);
+
+        // change [u8] to [u32]
+        let mut hash_out: Vec<u32> = Vec::new();
+        let hash_u8_array: Vec<&[u8]> = expected_hash.chunks(4).collect();
+        for i in 0..hash_u8_array.len() {
+            let b = hex::encode(&hash_u8_array[i]);
+            hash_out.extend([(i64::from_str_radix(&b, 16).unwrap()) as u32 ])
+        }
+
         let input = s.into_bytes();
 
         let mut message = pad(input);
         let msg_len = message.len() * 8; // multiply 8 for is u8 vector
         assert_eq!( msg_len % 512, 0);
         let chunk_size = (msg_len / 512) as u32;
-        let m_len = message.len();
         let script = script! {
             {sha256(chunk_size, &mut message)}
-            /*for i in 0..8{
-                {u32_push(out[i])}
-                {u32_equalverify()}
-            }
-            OP_TRUE*/
-        };
-        let res = execute_script(script);
-        assert!(res.success);
-    }
-
-/*     #[test]
-    fn test_sha256_helloworld() {
-        //let hex_out = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
-        let out:[u32;8] = [
-            0xb94d27b9, 0x934d3e08, 0xa52e52d7, 0xda7dabfa, // 4
-            0xc484efe3, 0x7a5380ee, 0x9088f7ac, 0xe2efcde9, // 8
-        ];
-        
-        let mut message:[u32;16] = //"hello_world" padded
-        [0x68656c6c, 0x6f20776f,
-        0x726c6480, 0,
-        0, 0,
-        0, 0,
-        0, 0,
-        0, 0,
-        0, 0,
-        0, 0x58,
-        ];
-        let msg_len = message.len() * 32; // multiply 32 for is u32 vector
-        assert_eq!( msg_len % 512, 0);
-        let chunk_size = (msg_len / 512) as u32;
-        let script = script! {
-            {initial_message(&mut message)}
-            {sha256(chunk_size)}
             for i in 0..8{
-                {u32_push(out[i])}
+                {u32_push(hash_out[i])}
                 {u32_equalverify()}
             }
             OP_TRUE
@@ -901,33 +859,4 @@ mod tests {
         let res = execute_script(script);
         assert!(res.success);
     }
-
-    #[test]
-    fn test_sha256_empty() {
-        //let hex_out = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-        let out:[u32;8] = [
-            0xe3b0c442, 0x98fc1c14, 0x9afbf4c8, 0x996fb924, // 4
-            0x27ae41e4, 0x649b934c, 0xa495991b, 0x7852b855, // 8
-        ];
-        
-        let mut message:[u32;16] = //empty string
-        [0x8000_0000, 0, 0, 0, 0, 0, 0, 0,
-            0,        0, 0, 0, 0, 0, 0, 0,
-        ];
-        let msg_len = message.len() * 32; // multiply 32 for is u32 vector
-        assert_eq!( msg_len % 512, 0);
-        let chunk_size = (msg_len / 512) as u32;
-        
-        let script = script! {
-            {initial_message(&mut message)}
-            {sha256(chunk_size)}
-            for i in 0..8{
-                {u32_push(out[i])}
-                {u32_equalverify()}
-            }
-            OP_TRUE
-        };
-        let res = execute_script(script);
-        assert!(res.success);
-    }*/
 }
