@@ -182,7 +182,7 @@ pub fn push_u8_to_mainstack(message: &mut [u8]) -> Script {
     }
 }
 
-pub fn push_u8_to_altstack(message: &mut [u8]) -> Script {
+pub fn push_u8_to_altstack(message: &[u8]) -> Script {
     //message.reverse(); // do not reverse for alt stack.
     script! {
         for i in (0..message.len()).step_by(4) {
@@ -669,8 +669,12 @@ fn save_wi16_swap(env: &mut Env, m: Ptr, delta: u32) -> Script {
 }
 
 /// SHA256 taking a 64-byte padded message and returning a 32-byte digest
-pub fn sha256(chunk_size: u32, message: &mut [u8]) -> Script {
+pub fn sha256(chunk_size: u32, message: &mut [u8], message_bak: &[u8]) -> Script {
     let mut env = ptr_init();
+    let message_array: Vec<&[u8]> = message_bak.chunks(64).collect();
+    let mut first_chunk =message[0..64].as_mut();
+
+    let alt_message: Vec<&[u8]> = message_array[1..].to_vec();
     let script = script! {
         // Initialize K32 const
         {push_K32()}
@@ -680,8 +684,11 @@ pub fn sha256(chunk_size: u32, message: &mut [u8]) -> Script {
 
         // put first chunk message to main stack
         // back up the other chunks in alt stack
-        {push_u8_to_mainstack(&mut message[0..64])}
-        {push_u8_to_altstack(&mut message[64..])} // TODO. Only works for 2 chunks
+        {push_u8_to_mainstack(&mut first_chunk)}
+        for i in 0..alt_message.len() {
+            {push_u8_to_altstack(alt_message[alt_message.len()-1-i])} 
+        }
+        //{push_u8_to_altstack(alt_message[0])} // TODO. Only works for 2 chunks
 
         // Push the initial Blake state onto the stack
         {initial_state()}
@@ -823,8 +830,10 @@ mod tests {
 
     #[test]
     fn test_sha256() {
+        //3 block size
+        let s = String::from("hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world");
         //2 block size
-        let s = String::from("hello world hello world hello world hello world hello world");
+        //let s = String::from("hello world hello world hello world hello world hello world");
         //1 block size
         //let s = String::from("hello world");
         
@@ -844,12 +853,12 @@ mod tests {
 
         let input = s.into_bytes();
 
-        let mut message = pad(input);
+        let message = pad(input);
         let msg_len = message.len() * 8; // multiply 8 for is u8 vector
         assert_eq!( msg_len % 512, 0);
         let chunk_size = (msg_len / 512) as u32;
         let script = script! {
-            {sha256(chunk_size, &mut message)}
+            {sha256(chunk_size, &mut message.clone(), & message)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
