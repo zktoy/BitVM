@@ -38,7 +38,11 @@ pub fn K(i: u32) -> Ptr { Ptr::K32(i) }
 // An environment to track elements on the stack
 type Env = HashMap<Ptr, u32>;
 
-pub fn ptr_init() -> Env {
+// make the stack as: [K32] [xor_table] [State] [Message]
+// The script size is: 809743
+// while [Message] [K32] [xor_table] [State], the script size is: 901769
+// while [K32] [xor_table] [Message] [State], the script size is: 802441
+pub fn ptr_init_1() -> Env { 
     // Initial positions for state and message
     let mut env: Env = Env::new();
     // make the stack as: [K32] [xor_table] [State] [Message]
@@ -50,6 +54,30 @@ pub fn ptr_init() -> Env {
         // The State's offset is the Message size
         env.insert(S(i), i + MESSAGE_SIZE);     
     }
+    
+    for i in 0..K32_SIZE {
+        // The k32's offset is the size of the state
+        // plus the u32 size of our XOR table, plus the K32_SIZE
+        env.insert(K(i), i + MESSAGE_SIZE + INITIAL_STATE_SIZE + XOR_TABLE_SIZE);
+    }
+    
+    env
+}
+
+// make the stack as: [K32] [xor_table] [Message] [State] 
+pub fn ptr_init() -> Env { 
+    // Initial positions for state and message
+    let mut env: Env = Env::new();
+    // make the stack as: [K32] [xor_table] [Message] [State] 
+    for i in 0..INITIAL_STATE_SIZE {
+        env.insert(S(i), i );     
+    }
+
+    for i in 0..MESSAGE_SIZE {
+        // The Message's offset is the State size
+        env.insert(M(i), i + INITIAL_STATE_SIZE);
+    }
+
     
     for i in 0..K32_SIZE {
         // The k32's offset is the size of the state
@@ -122,7 +150,11 @@ const K32_SIZE: u32 = 64;
 const MESSAGE_SIZE: u32 = 16;
 const XOR_TABLE_SIZE: u32 = 256 / 4;
 // for stack: [K32] [xor_table] [State] [Message]
-const STATE_TO_TOP_SIZE: u32 = MESSAGE_SIZE; 
+//const STATE_TO_TOP_SIZE: u32 = MESSAGE_SIZE; 
+//const XOR_TABLE_TO_TOP_SIZE: u32 = MESSAGE_SIZE + INITIAL_STATE_SIZE;
+
+// for stack: [K32] [xor_table] [Message] [State] 
+const STATE_TO_TOP_SIZE: u32 = 0; 
 const XOR_TABLE_TO_TOP_SIZE: u32 = MESSAGE_SIZE + INITIAL_STATE_SIZE;
 
 pub fn initial_state() -> Vec<Script> {
@@ -662,13 +694,13 @@ pub fn sha256(chunk_size: u32, message: &mut [u8]) -> Script {
         // We have to do that only once per program
         u8_push_xor_table
 
-        // Push the initial Blake state onto the stack
-        {initial_state()}
-
         // put first chunk message to main stack
         // back up the other chunks in alt stack
         {push_u8_to_mainstack(&mut message[0..64])}
         {push_u8_to_altstack(&mut message[64..])}
+
+        // Push the initial Blake state onto the stack
+        {initial_state()}
 
         {copy_state_to_altstack()} //copy initial block state to alt stack
 
@@ -676,18 +708,18 @@ pub fn sha256(chunk_size: u32, message: &mut [u8]) -> Script {
         // Perform a round of SHA256
         {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
 
-        // stack now is: [Message] [State]
+        // stack now is: [K32] [XOR_Table] [Message] [State]
         for _ in 1..chunk_size{
             // put the previous state to alt stack
             for _ in 0..8{
                 {u32_toaltstack()}
             }
-
+            //drop the previous message chunk
             for _ in 0..MESSAGE_SIZE {
-                {u32_drop()} //drop the previous message chunk
+                {u32_drop()}
             }
 
-            //put the previous state to stack
+            //put the previous state back to stack
             for _ in 0..8{
                 {u32_fromaltstack()}
             }
@@ -696,9 +728,15 @@ pub fn sha256(chunk_size: u32, message: &mut [u8]) -> Script {
                 {u32_fromaltstack()}
             }
 
-            // stack now is: [State] [Message] 
+            // stack now is: [K32] [XOR_Table] [State] [Message]
+            for _ in 0..MESSAGE_SIZE{
+                {u32_roll(MESSAGE_SIZE+INITIAL_STATE_SIZE-1)}
+            }
+
+            // stack now is: [K32] [XOR_Table] [Message] [State]
+
             // Perform a round of SHA256
-            {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
+            //{compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
         }
 
         // Save the hash
