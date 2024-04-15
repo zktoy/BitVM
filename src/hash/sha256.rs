@@ -653,34 +653,6 @@ fn compress(env: &mut Env, ap: u32) -> Script {
     }
 }
 
-fn compress_debug(env: &mut Env, ap: u32) -> Script {
-    script! {
-        for i in 0..16{ //16
-            {round(env, ap, i, i & 0xF)}
-        }
-
-        /*for i in 16..64{ //64
-            {SMALL_S0(env, ap, M((i+1) & 0xF), 0)}
-            // now 1 more element on stack
-            {SMALL_S1(env, ap+1, M((i+14) & 0xF), 1)}
-            // now 2 more elements on stack
-            // stack: h g f e d c b a | S0 S1 
-            
-            {calc_Wi(env, i, i & 0xF, 2)}
-            
-            //now 1 more element on stack
-            // stack: h g f e d c b a | t3
-            {save_wi16_swap(env, M(i & 0xF), 1)}
-            
-            //now no additional elements on stack
-            // stack: h g f e d c b a wi16
-            {round(env, ap, i, i & 0xF)}
-        }
-
-        {final_add()}*/
-    }
-}
-
 fn save_wi16_swap(env: &mut Env, m: Ptr, delta: u32) -> Script {
     let n = env.ptr(m) + delta;
 
@@ -763,13 +735,18 @@ pub fn sha256(chunk_size: u32, message: &mut [u8]) -> Script {
             }
 
             // stack now is: [K32] [XOR_Table] [Message] [State]
+            // alt stack: [uncompressed rest Message]
+            // copy previous block state to alt stack
+            {copy_state_to_altstack()}
 
+            // stack now is: [K32] [XOR_Table] [Message] [State]
+            // alt stack: [uncompressed rest Message] [State]
             // Perform a round of SHA256
-            /*{compress_debug(&mut env, XOR_TABLE_TO_TOP_SIZE)}*/
+            {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
         }
 
         // Save the hash
-        /*for _ in 0..8{
+        for _ in 0..8{
             {u32_toaltstack()}
         }
 
@@ -784,7 +761,7 @@ pub fn sha256(chunk_size: u32, message: &mut [u8]) -> Script {
         // Load the hash
         for _ in 0..8{
             {u32_fromaltstack()}
-        }*/
+        }
     };
 
     script
@@ -870,8 +847,8 @@ mod tests {
             0xc484efe3, 0x7a5380ee, 0x9088f7ac, 0xe2efcde9, // 8
         ];
 
-        let s = String::from("hello world hello world hello world hello world hello world");
-        //let s = String::from("hello world");
+        //let s = String::from("hello world hello world hello world hello world hello world");
+        let s = String::from("hello world");
         let input = s.into_bytes();
 
         let mut message = pad(input);
@@ -879,14 +856,14 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_size = (msg_len / 512) as u32;
         let m_len = message.len();
-        message[m_len-1] = 224;//TODO. pad() for long string is not right now.
+        //message[m_len-1] = 224;//TODO. pad() for long string is not right now.
         let script = script! {
             {sha256(chunk_size, &mut message)}
-            /*for i in 0..8{
+            for i in 0..8{
                 {u32_push(out[i])}
                 {u32_equalverify()}
             }
-            OP_TRUE*/
+            OP_TRUE
         };
         let res = execute_script(script);
         assert!(res.success);
