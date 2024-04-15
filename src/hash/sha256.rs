@@ -383,16 +383,16 @@ pub fn round(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
         {maj(env, ap + 2, S(0), S(1), S(2), 2) }
 
         // now 3 more element on stack 
-        //stack: h g f e d c b a T0 T1 T2
+        //stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 T1 T2
         // while T0 is temp1, T1 is big_s0, T2 is maj
         // calc T3=temp2=big_20+maj=T1+T2
-        {u32_add(1, 0)} // stack: h g f e d c b a T0 T1 | T3
+        {u32_add(1, 0)} // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 T1 | T3
         {u32_roll(1)}
-        {u32_drop()} // stack: h g f e d c b a T0 | T3
+        {u32_drop()} // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | T3
 
         //calc a'=temp1+temp2
-        {u32_add(1, 0)}  // stack: h g f e d c b a T0 | a'
-        {u32_toaltstack()} // stack: h g f e d c b a T0 
+        {u32_add(1, 0)}  // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | a'
+        {u32_toaltstack()} // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 
         // alt: a'
 
         // now 1 more element on stack
@@ -432,7 +432,13 @@ pub fn round(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
             {u32_roll(INITIAL_STATE_SIZE + STATE_TO_TOP_SIZE)}
             {u32_drop()}
         }
-        // stack: h‘ g’ f‘ e’ d‘ c’ b‘ a’
+
+        // TODO: can be optimized with env?
+        // stack: [STATE_TO_TOP_SIZE] | h‘ g’ f‘ e’ d‘ c’ b‘ a’
+        for _ in 0..STATE_TO_TOP_SIZE {
+            {u32_roll(INITIAL_STATE_SIZE+STATE_TO_TOP_SIZE-1)}
+        }
+        // stack: h‘ g’ f‘ e’ d‘ c’ b‘ a’ [STATE_TO_TOP_SIZE] 
     };
 
     script
@@ -785,11 +791,11 @@ mod tests {
         let chunk_size = (msg_len / 512) as u32;
         let script = script! {
             {sha256(chunk_size, &mut message)}
-            /*for i in 0..8{
+            for i in 0..8{
                 {u32_push(out[i])}
                 {u32_equalverify()}
             }
-            OP_TRUE*/
+            OP_TRUE
         };
         let res = execute_script(script);
         assert!(res.success);
