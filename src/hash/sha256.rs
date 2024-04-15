@@ -587,7 +587,7 @@ fn final_add() -> Script {
             {u32_roll(1)}
             {u32_drop()}
         }
-        // stack: h g f e d c b a
+        // stack: [Message] h g f e d c b a
         // alt: 
     )
 }
@@ -672,13 +672,34 @@ pub fn sha256(chunk_size: u32, message: &mut [u8]) -> Script {
 
         {copy_state_to_altstack()} //copy initial block state to alt stack
 
+        // stack now is: [K32] [XOR_Table] [Message] [State]
         // Perform a round of SHA256
         {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
 
-        /*for _ in 1..chunk_size{
+        // stack now is: [Message] [State]
+        for _ in 1..chunk_size{
+            // put the previous state to alt stack
+            for _ in 0..8{
+                {u32_toaltstack()}
+            }
+
+            for _ in 0..MESSAGE_SIZE {
+                {u32_drop()} //drop the previous message chunk
+            }
+
+            //put the previous state to stack
+            for _ in 0..8{
+                {u32_fromaltstack()}
+            }
+
+            for _ in 0..MESSAGE_SIZE {
+                {u32_fromaltstack()}
+            }
+
+            // stack now is: [State] [Message] 
             // Perform a round of SHA256
             {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
-        }*/
+        }
 
         // Save the hash
         for _ in 0..8{
@@ -782,6 +803,7 @@ mod tests {
             0xc484efe3, 0x7a5380ee, 0x9088f7ac, 0xe2efcde9, // 8
         ];
 
+        //let s = String::from("hello world hello world hello world hello world hello world");
         let s = String::from("hello world");
         let input = s.into_bytes();
 
