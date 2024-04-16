@@ -9,6 +9,7 @@ use crate::u32::{
     u32_std::*,
     u32_and::*,
     u32_xor::{u32_xor, u8_drop_xor_table, u8_push_xor_table},
+    u32_shr::*,
     // unroll,
 };
 
@@ -515,7 +516,7 @@ fn SMALL_S0(env: &mut Env, ap: u32, m: Ptr, delta: u32) -> Script {
         {u32_pick(n)} //stack: h g f e d c b a | m
         {u32_dup()} //stack: h g f e d c b a | m m
         {u32_dup()} //stack: h g f e d c b a | m m m
-        {u32_shr3(ap + 1 + 3)} // already 3 more elements
+        {u32_shr(3, ap + 1 + 3)} // already 3 more elements
         {u32_roll(1)} //move `m` to top
         {u32_rrot(18)}
         {u32_roll(2)} //move `m` to top
@@ -552,7 +553,7 @@ fn SMALL_S1(env: &mut Env, ap: u32, m: Ptr, delta: u32) -> Script {
         {u32_pick(n)} //stack: h g f e d c b a S0 | m
         {u32_dup()} //stack: h g f e d c b a S0 | m m
         {u32_dup()} //stack: h g f e d c b a S0 | m m m
-        {u32_shr10(ap + 1 + 3)} // already 3 more elements
+        {u32_shr(10, ap + 1 + 3)} // already 3 more elements
         {u32_roll(1)} //move `m` to top
         {u32_rrot(19)}
         {u32_roll(2)} //move `m` to top
@@ -757,9 +758,9 @@ pub fn sha256(chunk_size: u32, message: &[u8], repeated_count: u32) -> Script {
                 {u32_drop()}
             }
             // stack now is: [K32] [XOR_Table] 
-            //put the padd_32bytes to stack first
+            //put the PADD_32BYTES to stack first
             for i in 0..8{
-                {u32_push(padd_32bytes[7-i])}
+                {u32_push(PADD_32BYTES[7-i])}
             }
             
             //put the previous state back to stack as [m8,...,m0]
@@ -806,7 +807,7 @@ pub fn sha256(chunk_size: u32, message: &[u8], repeated_count: u32) -> Script {
 }
 
 /// SHA256 padding info for 32byte string
-pub const padd_32bytes: [u32; 8] = [0x80000000, 0, 0, 0, 0, 0, 00, 0x100];
+pub const PADD_32BYTES: [u32; 8] = [0x80000000, 0, 0, 0, 0, 0, 00, 0x100];
 
 /// SHA256 taking a 64-byte padded message 
 /// SHA256(SHA256(..(SHA256(m)))), repated to run SHA256 `repeated_count` times.
@@ -876,9 +877,9 @@ pub fn sha256_repeated(chunk_size: u32, message: &[u8], repeated_count: u32) -> 
                 {u32_drop()}
             }
             // stack now is: [K32] [XOR_Table] 
-            //put the padd_32bytes to stack first
+            //put the PADD_32BYTES to stack first
             for i in 0..8{
-                {u32_push(padd_32bytes[7-i])}
+                {u32_push(PADD_32BYTES[7-i])}
             }
             
             //put the previous state back to stack as [m8,...,m0]
@@ -993,6 +994,9 @@ mod tests {
     use crate::hash::sha256::*;
 
     use crate::treepp::{execute_script, script};
+    use crate::u32::u32_shr;
+    use bitcoin::opcodes::all::{OP_DROP, OP_EQUALVERIFY, OP_ROLL};
+    use bitcoin::opcodes::OP_TRUE;
     use bitcoin::script;
     use hex::ToHex;
     use sha2::{Sha256, Digest};
@@ -1046,7 +1050,7 @@ mod tests {
     }
 
     #[test]
-    fn test_bench() {
+    fn test_bench_rrot() {
         let bits_cared = [2, 3, 6, 7, 10, 11, 13, 17, 18, 19, 22, 25];
 
         for i in 0..bits_cared.len() {
