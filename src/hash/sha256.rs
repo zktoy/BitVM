@@ -763,10 +763,10 @@ pub const padd_32bytes: [u32; 8] = [0x80000000, 0, 0, 0, 0, 0, 00, 0x100];
 /// SHA256 taking a 64-byte padded message 
 /// SHA256(SHA256(..(SHA256(m)))), repated to run SHA256 repeated_count.
 /// and returning a 32-byte digest
-pub fn sha256_repeated(chunk_size: u32, message: &mut [u8], message_bak: &[u8], repeated_count: u32) -> Script {
+pub fn sha256_repeated(chunk_size: u32, message: &[u8], repeated_count: u32) -> Script {
     let mut env = ptr_init();
-    let message_array: Vec<&[u8]> = message_bak.chunks(64).collect();
-    let mut first_chunk =message[0..64].as_mut();
+    let message_array: Vec<&[u8]> = message.chunks(64).collect();
+    let mut first_chunk: Vec<u8> = message[0..64].to_vec();
 
     let alt_message: Vec<&[u8]> = message_array[1..].to_vec();
     let script = script! {
@@ -999,7 +999,7 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_size = (msg_len / 512) as u32;
         let script = script! {
-            {sha256_repeated(chunk_size, &mut message.clone(), & message, repeated_count)}
+            {sha256_repeated(chunk_size, & message, repeated_count)}
             for i in 0..8{
                 {u32_push(hash_out1[i])}
                 {u32_equalverify()}
