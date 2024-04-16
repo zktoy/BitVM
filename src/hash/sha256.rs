@@ -485,30 +485,6 @@ fn copy_state_to_altstack() -> Script {
     )
 }
 
-//Script added cause we are getting Non pushable error otherwise, not sure how to...
-pub fn permute(env: &mut Env) -> Script {
-    let mut prev_env = Vec::new();
-    for i in 0..16 {
-        prev_env.push(env.ptr(M(i)));
-    }
-
-    for i in 0..16 {
-        env.insert(M(i as u32), prev_env[MSG_PERMUTATION[i] as usize]);
-    }
-
-    return script! {};
-}
-
-fn u32_shr3(ap: u32) -> Script{
-    let script = script!(
-        {u32_rrot(3)}
-        {u32_push(0xffff_ffff >> 3)}
-        {u32_and(1, 0, ap + 1)} // 1 more element on stack
-        {u32_roll(1)}
-        {u32_drop()}
-    );
-    script
-}
 // calc \sigma_0(X)=RotR(X, 7)\oplus RotR(X,18)\oplus ShR(X,3)
 fn SMALL_S0(env: &mut Env, ap: u32, m: Ptr, delta: u32) -> Script {
     let n = env.ptr(m) + delta;
@@ -809,122 +785,6 @@ pub fn sha256(chunk_size: u32, message: &[u8], repeated_count: u32) -> Script {
 /// SHA256 padding info for 32byte string
 pub const PADD_32BYTES: [u32; 8] = [0x80000000, 0, 0, 0, 0, 0, 00, 0x100];
 
-/// SHA256 taking a 64-byte padded message 
-/// SHA256(SHA256(..(SHA256(m)))), repated to run SHA256 `repeated_count` times.
-/// and returning a 32-byte digest
-pub fn sha256_repeated(chunk_size: u32, message: &[u8], repeated_count: u32) -> Script {
-    let mut env = ptr_init();
-    let message_array: Vec<&[u8]> = message.chunks(64).collect();
-    let mut first_chunk: Vec<u8> = message[0..64].to_vec();
-
-    let alt_message: Vec<&[u8]> = message_array[1..].to_vec();
-    let script = script! {
-        // put all initial data to stack
-        {stack_initial(&mut first_chunk, alt_message)}
-
-        // stack now is: [K32] [XOR_Table] [Message] [State]
-        // Perform a round of SHA256
-        {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
-
-        // stack now is: [K32] [XOR_Table] [Message] [State]
-        for _ in 1..chunk_size{
-            // put the previous state to alt stack
-            for _ in 0..8{
-                {u32_toaltstack()}
-            }
-            //drop the previous message chunk
-            for _ in 0..MESSAGE_SIZE {
-                {u32_drop()}
-            }
-
-            //put the previous state back to stack
-            for _ in 0..8{
-                {u32_fromaltstack()}
-            }
-
-            for _ in 0..MESSAGE_SIZE {
-                {u32_fromaltstack()}
-            }
-
-            // stack now is: [K32] [XOR_Table] [State] [Message]
-            for _ in 0..INITIAL_STATE_SIZE{
-                {u32_roll(MESSAGE_SIZE+INITIAL_STATE_SIZE-1)}
-            }
-
-            // stack now is: [K32] [XOR_Table] [Message] [State]
-            // alt stack: [uncompressed rest Message]
-            // copy previous block state to alt stack
-            {copy_state_to_altstack()}
-
-            // stack now is: [K32] [XOR_Table] [Message] [State]
-            // alt stack: [uncompressed rest Message] [State]
-            // Perform a round of SHA256
-            {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
-        }
-
-        
-        // Finshed the result=SHA256(m) now.
-        // stack now is: [K32] [XOR_Table] [Message] [State]
-        for _ in 1..repeated_count {
-            // to run SHA256(m)
-            // put the previous state to alt stack
-            for _ in 0..8{
-                {u32_toaltstack()}
-            }
-            // stack now is: [K32] [XOR_Table] [Message]
-            //drop the previous message chunk
-            for _ in 0..MESSAGE_SIZE {
-                {u32_drop()}
-            }
-            // stack now is: [K32] [XOR_Table] 
-            //put the PADD_32BYTES to stack first
-            for i in 0..8{
-                {u32_push(PADD_32BYTES[7-i])}
-            }
-            
-            //put the previous state back to stack as [m8,...,m0]
-            for _ in 0..8{
-                {u32_fromaltstack()}
-            }
-
-            // stack now is: [K32] [XOR_Table] [Message]
-
-            // Push the initial Block state onto the stack
-            {initial_state()} // a new SHA256, need to reset the state
-            // stack now is: [K32] [XOR_Table] [Message] [State]
-            // alt stack: []
-            // copy previous block state to alt stack
-            {copy_state_to_altstack()}
-
-            // stack now is: [K32] [XOR_Table] [Message] [State]
-            // alt stack: [State]
-            // Perform a round of SHA256
-            {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
-            
-        }
-
-        // Save the hash
-        for _ in 0..8{
-            {u32_toaltstack()}
-        }
-
-        // Clean up the input data and the other half of the state
-        for _ in 0..K32_SIZE+MESSAGE_SIZE {
-            {u32_drop()}
-        }
-
-        // Drop the lookup table
-        u8_drop_xor_table
-
-        // Load the hash
-        for _ in 0..8{
-            {u32_fromaltstack()}
-        }
-    };
-
-    script
-}
-
 pub fn push_bytes_hex(hex: &str) -> Script {
     let hex: String = hex
         .chars()
@@ -1004,7 +864,7 @@ mod tests {
     #[test]
     fn test_sha256_blockhash() {
         // Take the example in to show [How To Calculate and Verify a Hash Of a Block](https://blockchain-academy.hs-mittweida.de/courses/blockchain-introduction-technical-beginner-to-intermediate/lessons/lesson-13-bitcoin-block-hash-verification/topic/how-to-calculate-and-verify-a-hash-of-a-block/)
-        let block_header = "0200000015a20d97f5a65e130e08f2b254f97f65b96173a7057aef0da203000000000000887e309c02ebdddbd0f3faff78f868d61b1c4cff2a25e5b3c9d90ff501818fa0e7965d508bdb051a40d8d8f7";
+        let block_header = "0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a29ab5f49ffff001d1dac2b7c";
         let repeated_count = 2;
         
         //let repeated_count = 1;
@@ -1037,7 +897,7 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_size = (msg_len / 512) as u32;
         let script = script! {
-            {sha256_repeated(chunk_size, & message, repeated_count)}
+            {sha256(chunk_size, & message, repeated_count)}
             for i in 0..8{
                 {u32_push(hash_out1[i])}
                 {u32_equalverify()}
