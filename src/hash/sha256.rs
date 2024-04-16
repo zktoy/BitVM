@@ -142,7 +142,6 @@ const K32: [u32; 64] = [
     0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ];
 
-const MSG_PERMUTATION: [u32; 16] = [2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8];
 const INITIAL_STATE_SIZE: u32 = 8;
 const K32_SIZE: u32 = 64;
 const MESSAGE_SIZE: u32 = 16;
@@ -510,16 +509,6 @@ fn SMALL_S0(env: &mut Env, ap: u32, m: Ptr, delta: u32) -> Script {
 
     };
 
-    script
-}
-fn u32_shr10(ap: u32) -> Script{
-    let script = script!(
-        {u32_rrot(10)}
-        {u32_push(0xffff_ffff >> 10)}
-        {u32_and(1, 0, ap + 1)} // 1 more element on stack
-        {u32_roll(1)}
-        {u32_drop()}
-    );
     script
 }
 // calc \sigma_1(X)=RotR(X, 17)\oplus RotR(X,19)\oplus ShR(X,10)
@@ -1003,7 +992,8 @@ mod tests {
             }
             OP_TRUE
         };
-        let res = execute_script(script);
+        let res = execute_script(script.clone());
+        println!("script size:{:?}, max_nb_stack_items:{:?}", script.len(), res.stats.max_nb_stack_items);
         assert!(res.success);
     }
 
