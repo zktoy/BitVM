@@ -2,6 +2,7 @@
 use std::collections::HashMap;
 
 use crate::treepp::{pushable, script, Script};
+use crate::u32::u32_add::u32_add_drop;
 use crate::u32::u32_std::{u32_equalverify, u32_roll};
 use crate::u32::{
     u32_add::u32_add,
@@ -227,10 +228,10 @@ fn Ch(env: &mut Env, ap: u32, e: Ptr, f: Ptr, g: Ptr, delta: u32) -> Script {
         {u32_roll(2)} //pick `g` to top
 
         // !e & g
-        {u32_and(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
-        
+        /*{u32_and(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
         {u32_roll(1)} //pick `!e` to top
-        {u32_drop()} //delete !e
+        {u32_drop()} //delete !e*/
+        {u32_and_drop(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
 
         //(e & f) ^ (!e & g)
         {u32_xor(1, 0, ap + 1 + 2)} //now already added 2 more elements on stack
@@ -313,6 +314,7 @@ pub fn temp1(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
         {u32_add(1, 0)} //stack: h g f e d c b a T0 T1 | t1
         {u32_roll(1)}
         {u32_drop()}
+
         //stack: h g f e d c b a T0 | t1
         // calc t2 = t1 + T0
         {u32_add(0, 1)} //stack: h g f e d c b a | t1 t2
@@ -370,10 +372,11 @@ pub fn maj(env: &mut Env, ap: u32, a: Ptr, b: Ptr, c: Ptr, delta: u32) -> Script
         {u32_fromaltstack()} //stack: h g f e d c b a T0 T1| t1 t2 a c
         //alt: 
         // t3 = a & c
-        {u32_and(1, 0, ap + 1 + 4)} //now already added 4 more elements on stack
+        /*{u32_and(1, 0, ap + 1 + 4)} //now already added 4 more elements on stack
         //stack: h g f e d c b a T0 T1| t1 t2 a t3
         {u32_roll(1)} 
-        {u32_drop()}
+        {u32_drop()}*/
+        {u32_and_drop(1, 0, ap + 1 + 4)} //now already added 4 more elements on stack
         //stack: h g f e d c b a T0 T1| t1 t2 t3
 
         // t4 = t2 ^ t3
