@@ -332,34 +332,30 @@ pub fn maj(env: &mut Env, ap: u32, a: Ptr, b: Ptr, c: Ptr, delta: u32) -> Script
     let n_c = env.ptr(c) + delta;
     let script = script! {
         
-        //stack: h g f e d c b a T0 T1
+        //stack: h g f e d c b a T0 T1 | 
         // while T0 is temp1, T1 is big_s0
-
-        {u32_pick(n_a)} //stack: h g f e d c b a T0 T1| a
-        //now 1 element more
-        {u32_pick(n_b+1)} //stack: h g f e d c b a T0 T1| a b
-        //now 2 element more
-        {u32_pick(n_c+2)} //stack: h g f e d c b a T0 T1| a b c
-        {u32_dup()}//stack: h g f e d c b a T0 T1| a b c c
-        {u32_toaltstack()}
-        //stack: h g f e d c b a T0 T1| a b c 
-        //alt: c
+        {u32_pick(n_c)}
+        //stack: h g f e d c b a T0 T1 | c
         
+        // now 1 more element
         // t1 = b & c
-        {u32_and(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
-        //stack: h g f e d c b a T0 T1| a b t1
-        {u32_roll(2)} //stack: h g f e d c b a T0 T1| b t1 a
-        {u32_roll(2)} //stack: h g f e d c b a T0 T1| t1 a b
+        {u32_and(n_b + 1, 0, ap + 1 + 1)} //now already added 3 more elements on stack
+        //stack: h g f e d c b a T0 T1| t1
 
+        // now 1 more element
+        {u32_pick(n_a + 1)}
+        //stack: h g f e d c b a T0 T1| t1 a
+        // now 2 more element
         // t2 = a & b
-        {u32_and(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
-        //stack: h g f e d c b a T0 T1| t1 a t2
-
-        {u32_roll(1)} //stack: h g f e d c b a T0 T1| t1 t2 a
-        {u32_fromaltstack()} //stack: h g f e d c b a T0 T1| t1 t2 a c
+        {u32_and(n_b + 2, 0, ap + 1 + 2)} //now already added 3 more elements on stack
+        //stack: h g f e d c b a T0 T1| t1 t2
         //alt: 
+        // now 2 more element
+        {u32_pick(n_a + 2)}
+        //stack: h g f e d c b a T0 T1| t1 t2 a
+        // now 3 more element
         // t3 = a & c
-        {u32_and_drop(1, 0, ap + 1 + 4)} //now already added 4 more elements on stack
+        {u32_and(n_c + 3, 0, ap + 1 + 3)} //now already added 4 more elements on stack
         //stack: h g f e d c b a T0 T1| t1 t2 t3
 
         // t4 = t2 ^ t3
