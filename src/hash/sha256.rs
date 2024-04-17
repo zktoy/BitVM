@@ -300,9 +300,8 @@ pub fn temp1(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
         //calc T2 = h + \Sigma_1(e) + Ch(e,f,g) + K_i + w
         //stack: h g f e d c b a T0 T1
         // calc t1 = h + T1
-        {u32_pick(n_h)} //pick `h` to top
-        //stack: h g f e d c b a T0 T1 | h
-        {u32_add_drop(1, 0)} 
+        //stack: h g f e d c b a T0 T1 | 
+        {u32_add(n_h, 0)} 
         //stack: h g f e d c b a T0 | t1
 
         // calc t2 = t1 + T0
@@ -311,24 +310,21 @@ pub fn temp1(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
 
         // now 1 element less
         // calc t3 = t2 + K_i
-        {u32_pick(n_Ki-1)} //pick K_i
-        //stack: h g f e d c b a | t2 K_i
-        {u32_add_drop(0, 1)} 
+        //stack: h g f e d c b a | t2
+        {u32_add(n_Ki-1, 0)} 
         //stack: h g f e d c b a | t3
-        //TODO. Do not move `a` for u32_add_drop(a, b), to improve pick and add case.
 
-        //stack: h g f e d c b a | t3
         // now 1 element less
         // calc t4 = t3 + M_i
-        {u32_pick(n_Mi-1)} //pick M_i
-        //stack: h g f e d c b a | t3 M_i
-        {u32_add_drop(0, 1)}
+        //stack: h g f e d c b a | t3
+        {u32_add(n_Mi-1, 0)}
         //stack: h g f e d c b a | t4
 
     };
 
     script
 }
+
 // calc maj = (a & b) ^ (a & c) ^ (b & c)
 pub fn maj(env: &mut Env, ap: u32, a: Ptr, b: Ptr, c: Ptr, delta: u32) -> Script {
     let n_a = env.ptr(a) + delta;
