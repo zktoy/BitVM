@@ -659,7 +659,7 @@ pub fn stack_initial(main_msg: &mut [u8], alt_msg: Vec<&[u8]>) -> Script {
 /// SHA256 taking a 64-byte padded message 
 /// SHA256(SHA256(..(SHA256(m)))), repated to run SHA256 `repeated_count` times.
 /// and returning a 32-byte digest
-pub fn sha256(chunk_size: u32, message: &[u8], repeated_count: u32) -> Script {
+pub fn sha256(chunk_count: u32, message: &[u8], repeated_count: u32) -> Script {
     let mut env = ptr_init();
     let message_array: Vec<&[u8]> = message.chunks(64).collect();
     let mut first_chunk: Vec<u8> = message[0..64].to_vec();
@@ -673,7 +673,7 @@ pub fn sha256(chunk_size: u32, message: &[u8], repeated_count: u32) -> Script {
         {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
 
         // stack now is: [K32] [XOR_Table] [Message] [State]
-        for _ in 1..chunk_size{
+        for _ in 1..chunk_count{
             // put the previous state to alt stack
             for _ in 0..8{
                 {u32_toaltstack()}
@@ -856,27 +856,27 @@ mod tests {
         let block_header = "0100000000000000000000000000000000000000000000000000000000000000000000003ba3edfd7a7b12b27ac72c3e67768f617fc81bc3888a51323a9fb8aa4b1e5e4a29ab5f49ffff001d1dac2b7c";
         let repeated_count = 2;
         
-        //let repeated_count = 1;
-        //let s = "d20176bc6e0b0a904efdfe257b8a50143cd6e3d4f2a154460d7d3a770b9847c4";
         let mut hasher = Sha256::new();
         hasher.update(hex::decode(block_header).unwrap());
         // Note that calling `finalize()` consumes hasher
-        let mut expected_hash1 = hasher.finalize();
+        let mut expected_hash = hasher.finalize();
 
         for _ in 1..repeated_count {
             hasher = Sha256::new();
-            hasher.update(expected_hash1);
-            expected_hash1 = hasher.finalize();
+            hasher.update(expected_hash);
+            expected_hash = hasher.finalize();
         }
+        let genesis_block_hash = "6fe28c0ab6f1b372c1a6a246ae63f74f931e8365e15a089c68d6190000000000";
+        assert_eq!(hex::encode(expected_hash).as_str(), genesis_block_hash);
 
-        println!("Expected hash: {:x}", expected_hash1);
+        println!("Expected hash: {:x}", expected_hash);
 
         // change [u8] to [u32]
-        let mut hash_out1: Vec<u32> = Vec::new();
-        let hash_u8_array1: Vec<&[u8]> = expected_hash1.chunks(4).collect();
-        for i in 0..hash_u8_array1.len() {
-            let b = hex::encode(&hash_u8_array1[i]);
-            hash_out1.extend([(i64::from_str_radix(&b, 16).unwrap()) as u32 ])
+        let mut hash_out: Vec<u32> = Vec::new();
+        let hash_u8_array: Vec<&[u8]> = expected_hash.chunks(4).collect();
+        for i in 0..hash_u8_array.len() {
+            let b = hex::encode(&hash_u8_array[i]);
+            hash_out.extend([(i64::from_str_radix(&b, 16).unwrap()) as u32 ])
         }
 
         let input = hex::decode(block_header).expect("Decoding failed");
@@ -884,11 +884,11 @@ mod tests {
         let message = pad(input);
         let msg_len = message.len() * 8; // multiply 8 for is u8 vector
         assert_eq!( msg_len % 512, 0);
-        let chunk_size = (msg_len / 512) as u32;
+        let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256(chunk_size, & message, repeated_count)}
+            {sha256(chunk_count, & message, repeated_count)}
             for i in 0..8{
-                {u32_push(hash_out1[i])}
+                {u32_push(hash_out[i])}
                 {u32_equalverify()}
             }
             OP_TRUE
@@ -941,9 +941,9 @@ mod tests {
         let message = pad(input);
         let msg_len = message.len() * 8; // multiply 8 for is u8 vector
         assert_eq!( msg_len % 512, 0);
-        let chunk_size = (msg_len / 512) as u32;
+        let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256(chunk_size, & message, 1)}
+            {sha256(chunk_count, & message, 1)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
@@ -983,9 +983,9 @@ mod tests {
         let message = pad(input);
         let msg_len = message.len() * 8; // multiply 8 for is u8 vector
         assert_eq!( msg_len % 512, 0);
-        let chunk_size = (msg_len / 512) as u32;
+        let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256(chunk_size, & message, 1)}
+            {sha256(chunk_count, & message, 1)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
@@ -1025,9 +1025,9 @@ mod tests {
         let message = pad(input);
         let msg_len = message.len() * 8; // multiply 8 for is u8 vector
         assert_eq!( msg_len % 512, 0);
-        let chunk_size = (msg_len / 512) as u32;
+        let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256(chunk_size, & message, 1)}
+            {sha256(chunk_count, & message, 1)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}

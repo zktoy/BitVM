@@ -123,7 +123,6 @@ pub fn u32_shr_debug(shr_num :usize, ap: u32) -> Script{
     let script = script!(
         {u32_rrot(shr_num)}
         {u32_push(0xffff_ffff >> shr_num)}
-        {preprocess(offset)}
         {u32_and(1, 0, ap + 1)} // 1 more element on stack
         {u32_roll(1)}
         {u32_drop()}  
