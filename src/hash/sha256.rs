@@ -899,6 +899,21 @@ mod tests {
     }
 
     #[test]
+    fn test_bench_shr() {
+        let bits_cared = [2, 3, 6, 7, 10, 11, 13, 17, 18, 19, 22, 25];
+
+        for i in 0..bits_cared.len() {
+            let script_now = script! {
+                {u32_shr(bits_cared[i], 100)}
+            };
+            let script_my = script! {
+                {u32_shr_debug(bits_cared[i], 100)}
+            };
+            println!("rrot: {:?}, now script size: {:?}, my script size: {:?}", bits_cared[i], script_now.len(), script_my.len());
+        }
+    }
+
+    #[test]
     fn test_bench_rrot() {
         let bits_cared = [2, 3, 6, 7, 10, 11, 13, 17, 18, 19, 22, 25];
 

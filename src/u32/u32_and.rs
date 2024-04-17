@@ -71,6 +71,9 @@ pub fn u8_and(i: u32) -> Script {
 /// The bitwise AND of the u32 elements at address a and at address b. Drops a and b
 /// 
 /// Expects the u8_xor_table to be on the stack
+/// input:  a0 a1 a2 a3 b0 b1 b2 b3
+/// output: a0 a1 a2 a3 r0 r1 r2 r3
+/// where: r0=a0&b0, r1=a1&b1, r2=a2&b2, r3=a3&b3
 pub fn u32_and(a: u32, b: u32, stack_size: u32) -> Script {
     assert_ne!(a, b);
     script! {
@@ -89,6 +92,39 @@ pub fn u32_and(a: u32, b: u32, stack_size: u32) -> Script {
         OP_TOALTSTACK
 
         {u8_and(2 + (stack_size - 2) * 4)}
+
+        OP_FROMALTSTACK
+        OP_FROMALTSTACK
+        OP_FROMALTSTACK
+    }
+}
+
+
+
+/// The bitwise AND of the u32 elements at address a and at address b. Drops a and b
+/// 
+/// Expects the u8_xor_table to be on the stack
+/// input:  a0 a1 a2 a3 b0 b1 b2 b3
+/// output: r0 r1 r2 r3
+/// where: r0=a0&b0, r1=a1&b1, r2=a2&b2, r3=a3&b3
+pub fn u32_and_without_copy(a: u32, b: u32, stack_size: u32) -> Script {
+    assert_ne!(a, b);
+    script! {
+        {u32_zip(a, b)}
+
+        {u8_and(8 + (stack_size - 3) * 4)}
+
+        OP_TOALTSTACK
+
+        {u8_and(6 + (stack_size - 3) * 4)}
+
+        OP_TOALTSTACK
+
+        {u8_and(4 + (stack_size - 3) * 4)}
+
+        OP_TOALTSTACK
+
+        {u8_and(2 + (stack_size - 3) * 4)}
 
         OP_FROMALTSTACK
         OP_FROMALTSTACK

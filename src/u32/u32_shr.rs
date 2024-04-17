@@ -51,57 +51,11 @@ pub fn u32_shr(shr_num :usize, ap: u32) -> Script{
     let script = script!(
         {u32_rrot(shr_num)}
         {u32_push(0xffff_ffff >> shr_num)}
-        {u32_and(1, 0, ap + 1)} // 1 more element on stack
-        {u32_roll(1)}
-        {u32_drop()}
+        {u32_and_without_copy(1, 0, ap + 1)} // 1 more element on stack
+        //{u32_roll(1)}
+        //{u32_drop()}
     );
     script
-}
-
-// a1,a2,a3,a4
-pub fn preprocess(offset: usize) -> Script {
-    assert!(offset < 4);
-    if offset == 0 {
-        /*
-        return script! {
-            OP_SWAP
-            OP_2SWAP
-            OP_SWAP
-        };*/
-        //a1,a2,a3,a4
-        return script!();
-    } else if offset == 1 {
-        return script! {
-            OP_TOALTSTACK
-            OP_TOALTSTACK
-            OP_TOALTSTACK
-            OP_DROP
-            0
-            OP_FROMALTSTACK
-            OP_FROMALTSTACK
-            OP_FROMALTSTACK
-        };// 0,a2,a3,a4
-    } else if offset == 2 {
-        return script! {
-            OP_2SWAP
-            OP_2DROP
-            0
-            0
-            OP_2SWAP
-        }; // 0,0,a3,a4
-    } else if offset == 3 {
-        return script! {
-            OP_TOALTSTACK
-            OP_DROP
-            OP_2DROP
-            0
-            0
-            0
-            OP_FROMALTSTACK
-        }; //0,0,0,a4
-    } else {
-        panic!("offset out of range")
-    }
 }
 
 pub fn sepcial_case(rot_num: usize) -> Option<Script> {
@@ -116,16 +70,31 @@ pub fn sepcial_case(rot_num: usize) -> Option<Script> {
 }
 /// Expects the u8_xor_table to be on the stack
 pub fn u32_shr_debug(shr_num :usize, ap: u32) -> Script{
+    //assert!(shr_num < 32);
     let remainder: usize = shr_num % 8;
-
     let offset: usize = (shr_num - remainder) / 8;
+    let mut b: Vec<u8> = vec![0_u8; (offset) as usize];
+    if b.len() < 4 {
+        b.append(&mut [(0xff >> remainder) as u8].to_vec());
+    }
+    for i in 0..(4-b.len())
+    {
+        b.append(&mut [0xff].to_vec())
+    }
+    println!("ZYD shifted num:{:?}, b:{:?}", shr_num, b);
+    //b: b0 b1 b2 b3
 
+    assert!(shr_num < 32);
+    match sepcial_case(shr_num) {
+        Some(res) => return res,
+        None => {}
+    }
     let script = script!(
         {u32_rrot(shr_num)}
         {u32_push(0xffff_ffff >> shr_num)}
-        {u32_and(1, 0, ap + 1)} // 1 more element on stack
-        {u32_roll(1)}
-        {u32_drop()}  
+        {u32_and_without_copy(1, 0, ap + 1)} // 1 more element on stack
+        //{u32_roll(1)}
+        //{u32_drop()}
     );
     script
 }
