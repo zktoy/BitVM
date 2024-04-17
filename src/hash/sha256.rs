@@ -511,24 +511,20 @@ fn calc_Wi(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
     let n_mi16 = env.ptr(M(i16)) + delta;
     let n_m_i_9 = env.ptr(M((i+9) & 0xF)) + delta;
     let script = script! {
-        // now 2 more elements on stack
-        // stack: h g f e d c b a | S0 S1 
-        {u32_pick(n_mi16)} //get w[i16]
-        {u32_pick(n_m_i_9+1)} //get w[(i + 9) & 0xF]
-        // stack: h g f e d c b a | S0 S1 w16 w9
-        {u32_add_drop(1, 0)} // t1=w16+w9
-        //now 3 more element on stack
-        // stack: h g f e d c b a | S0 S1 t1
-        {u32_add_drop(1, 0)} // t2=S1+t1
-        //now 2 more element on stack
-        // stack: h g f e d c b a | S0 t2
-        {u32_add_drop(1, 0)} // t3=S0+t2
-        //now 1 more element on stack
-        // stack: h g f e d c b a | t3
+        // stack: h g f e d c b a S0 S1 | 
+        {u32_add_drop(1, 0)}
+        // stack: h g f e d c b a  | 'S0+S1'
+        // now 1 element less
+        {u32_add(n_mi16 - 1, 0)}
+        // stack: h g f e d c b a  | 'S0+S1+w[i16]'
+        // now 1 element less
+        {u32_add(n_m_i_9 - 1, 0)}
+        // stack: h g f e d c b a  | 'S0+S1+w[i16]+w9'
     };
 
     script
 }
+
 fn final_add() -> Script {
     script!(
         // stack: h g f e d c b a [STATE_TO_TOP_SIZE]
