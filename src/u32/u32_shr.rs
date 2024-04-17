@@ -146,7 +146,6 @@ pub fn u32_shr_debug(shr_num :usize, ap: u32) -> Script{
     {
         b.append(&mut [0xff].to_vec())
     }
-    println!("ZYD shifted num:{:?}, b:{:?}", shr_num, b);
     //b: b0 b1 b2 b3
     let script = script!(
         {u32_rrot(shr_num)}

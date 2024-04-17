@@ -108,6 +108,7 @@ pub fn u32_and(a: u32, b: u32, stack_size: u32) -> Script {
 /// input:  a0 a1 a2 a3 b0 b1 b2 b3
 /// output: r0 r1 r2 r3
 /// where: r0=a0&b0, r1=a1&b1, r2=a2&b2, r3=a3&b3
+/// Drops both `a` and `b`
 pub fn u32_and_drop(a: u32, b: u32, stack_size: u32) -> Script {
     assert_ne!(a, b);
     script! {
