@@ -48,12 +48,73 @@ pub fn u32_shr(shr_num :usize, ap: u32) -> Script{
         Some(res) => return res,
         None => {}
     }
+    let remainder: usize = shr_num % 8;
+    let offset: usize = (shr_num - remainder) / 8;
+    let mut b: Vec<u8> = vec![0_u8; (offset) as usize];
+    if b.len() < 4 {
+        b.append(&mut [(0xff >> remainder) as u8].to_vec());
+    }
+    for i in 0..(4-b.len())
+    {
+        b.append(&mut [0xff].to_vec())
+    }
+    //b: b0 b1 b2 b3
     let script = script!(
         {u32_rrot(shr_num)}
-        {u32_push(0xffff_ffff >> shr_num)}
-        {u32_and_without_copy(1, 0, ap + 1)} // 1 more element on stack
-        //{u32_roll(1)}
-        //{u32_drop()}
+        // stack: a0 a1 a2 a3
+        if b[3] == 0 {
+            OP_DROP
+        } else {
+            {b[3]}
+            // stack: a0 a1 a2 a3 b3
+            {u8_and(5 + (ap - 2) * 4)}
+            OP_TOALTSTACK
+        }
+        if b[2] == 0 {
+            OP_DROP
+        } else {
+            {b[2]}
+            // stack: a0 a1 a2 b2
+            // alt: r3
+            {u8_and(4 + (ap - 2) * 4)}
+            OP_TOALTSTACK
+        }
+        if b[1] == 0 {
+            OP_DROP
+        } else {
+            {b[1]}
+            // stack: a0 a1 b1
+            // alt: r3 r2
+            {u8_and(3 + (ap - 2) * 4)}
+            OP_TOALTSTACK
+        }
+        if b[0] == 0 {
+            OP_DROP
+            0
+        } else {
+            {b[0]}
+            // stack: a0 b0
+            // alt: r3 r2 r1
+            {u8_and(2 + (ap - 2) * 4)}
+        }
+        // stack: r0
+        if b[1] == 0 {
+            0
+        } else {
+            OP_FROMALTSTACK
+        }
+        // stack: r0 r1
+        if b[2] == 0 {
+            0
+        } else {
+            OP_FROMALTSTACK
+        }
+        // stack: r0 r1 r2
+        if b[3] == 0 {
+            0
+        } else {
+            OP_FROMALTSTACK
+        }
     );
     script
 }
@@ -70,7 +131,11 @@ pub fn sepcial_case(rot_num: usize) -> Option<Script> {
 }
 /// Expects the u8_xor_table to be on the stack
 pub fn u32_shr_debug(shr_num :usize, ap: u32) -> Script{
-    //assert!(shr_num < 32);
+    assert!(shr_num < 32);
+    match sepcial_case(shr_num) {
+        Some(res) => return res,
+        None => {}
+    }
     let remainder: usize = shr_num % 8;
     let offset: usize = (shr_num - remainder) / 8;
     let mut b: Vec<u8> = vec![0_u8; (offset) as usize];
@@ -83,18 +148,62 @@ pub fn u32_shr_debug(shr_num :usize, ap: u32) -> Script{
     }
     println!("ZYD shifted num:{:?}, b:{:?}", shr_num, b);
     //b: b0 b1 b2 b3
-
-    assert!(shr_num < 32);
-    match sepcial_case(shr_num) {
-        Some(res) => return res,
-        None => {}
-    }
     let script = script!(
         {u32_rrot(shr_num)}
-        {u32_push(0xffff_ffff >> shr_num)}
-        {u32_and_without_copy(1, 0, ap + 1)} // 1 more element on stack
-        //{u32_roll(1)}
-        //{u32_drop()}
+        // stack: a0 a1 a2 a3
+        if b[3] == 0 {
+            OP_DROP
+        } else {
+            {b[3]}
+            // stack: a0 a1 a2 a3 b3
+            {u8_and(5 + (ap - 2) * 4)}
+            OP_TOALTSTACK
+        }
+        if b[2] == 0 {
+            OP_DROP
+        } else {
+            {b[2]}
+            // stack: a0 a1 a2 b2
+            // alt: r3
+            {u8_and(4 + (ap - 2) * 4)}
+            OP_TOALTSTACK
+        }
+        if b[1] == 0 {
+            OP_DROP
+        } else {
+            {b[1]}
+            // stack: a0 a1 b1
+            // alt: r3 r2
+            {u8_and(3 + (ap - 2) * 4)}
+            OP_TOALTSTACK
+        }
+        if b[0] == 0 {
+            OP_DROP
+            0
+        } else {
+            {b[0]}
+            // stack: a0 b0
+            // alt: r3 r2 r1
+            {u8_and(2 + (ap - 2) * 4)}
+        }
+        // stack: r0
+        if b[1] == 0 {
+            0
+        } else {
+            OP_FROMALTSTACK
+        }
+        // stack: r0 r1
+        if b[2] == 0 {
+            0
+        } else {
+            OP_FROMALTSTACK
+        }
+        // stack: r0 r1 r2
+        if b[3] == 0 {
+            0
+        } else {
+            OP_FROMALTSTACK
+        }
     );
     script
 }

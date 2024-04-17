@@ -78,6 +78,7 @@ pub fn u32_and(a: u32, b: u32, stack_size: u32) -> Script {
     assert_ne!(a, b);
     script! {
         {u32_copy_zip(a, b)}
+        // stack: a0 b0 a1 b1 a2 b2 a3 b3 a0 a1 a2 a3
 
         {u8_and(8 + (stack_size - 2) * 4)}
 
@@ -111,6 +112,7 @@ pub fn u32_and_without_copy(a: u32, b: u32, stack_size: u32) -> Script {
     assert_ne!(a, b);
     script! {
         {u32_zip(a, b)}
+        // stack: a0 b0 a1 b1 a2 b2 a3 b3
 
         {u8_and(8 + (stack_size - 3) * 4)}
 

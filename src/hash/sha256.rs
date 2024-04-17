@@ -909,7 +909,7 @@ mod tests {
             let script_my = script! {
                 {u32_shr_debug(bits_cared[i], 100)}
             };
-            println!("rrot: {:?}, now script size: {:?}, my script size: {:?}", bits_cared[i], script_now.len(), script_my.len());
+            println!("sshr: {:?}, now script size: {:?}, my script size: {:?}", bits_cared[i], script_now.len(), script_my.len());
         }
     }
 
