@@ -214,31 +214,40 @@ fn Ch(env: &mut Env, ap: u32, e: Ptr, f: Ptr, g: Ptr, delta: u32) -> Script {
         {u32_pick(n_e + 1)} //stack: h g f e d c b a T0 | g e
         {u32_pick(n_f + 2)} //stack: h g f e d c b a T0 | g e f
         
+        // now 3 more element
         // t1 = e & f
         {u32_and(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
-        //stack: h g f e d c b a T0 | g f t1
+        //stack: h g f e d c b a T0 | g e t1
 
         {u32_roll(1)} //pick `e` to top
+        //stack: h g f e d c b a T0 | g t1 e
         {u32_push(0xffff_ffff)} 
+        //stack: h g f e d c b a T0 | g t1 e '0xffff_ffff'
 
+        // now 4 more element
         // use xor to get !e
         {u32_xor(1, 0, ap + 1 + 4)} //now already added 4 more elements on stack
         
+        //stack: h g f e d c b a T0 | g t1 e !e
         {u32_roll(1)} //pick `e` to top
         {u32_drop()} //delete e
+        //stack: h g f e d c b a T0 | g t1 !e
         {u32_roll(2)} //pick `g` to top
 
         // !e & g
-        /*{u32_and(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
-        {u32_roll(1)} //pick `!e` to top
-        {u32_drop()} //delete !e*/
+        //stack: h g f e d c b a T0 | t1 !e g
+        // now 3 more element
         {u32_and_drop(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
+        //stack: h g f e d c b a T0 | t1 '!e & g'
 
+        // now 2 more element
         //(e & f) ^ (!e & g)
         {u32_xor(1, 0, ap + 1 + 2)} //now already added 2 more elements on stack
-        
+        //stack: h g f e d c b a T0 | t1 '(e & f) ^ (!e & g)'
+
         {u32_roll(1)} //pick `t1` to top
         {u32_drop()} //delete t1
+        //stack: h g f e d c b a T0 | '(e & f) ^ (!e & g)'
         
     };
     
@@ -744,7 +753,7 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
         // put all initial data to stack
         {stack_initial(&mut first_chunk, alt_message)}
 
-        {u32_add(env.ptr(S(0)), env.ptr_extract(S(1)))}
+        {u32_add(env.ptr(S(2)), env.ptr_extract(S(1)))}
 
         // stack now is: [K32] [XOR_Table] [Message] [State]
         // Perform a round of SHA256
