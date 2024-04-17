@@ -210,43 +210,37 @@ fn Ch(env: &mut Env, ap: u32, e: Ptr, f: Ptr, g: Ptr, delta: u32) -> Script {
     let n_f = env.ptr(f) + delta;
     let n_g = env.ptr(g) + delta;
     let script = script! {
-        {u32_pick(n_g)} //stack: h g f e d c b a T0 | g 
-        {u32_pick(n_e + 1)} //stack: h g f e d c b a T0 | g e
-        {u32_pick(n_f + 2)} //stack: h g f e d c b a T0 | g e f
-        
-        // now 3 more element
+        //stack: h g f e d c b a T0 |
+        {u32_pick(n_f)}
+        //stack: h g f e d c b a T0 |f
+        // now 1 more element
         // t1 = e & f
-        {u32_and(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
-        //stack: h g f e d c b a T0 | g e t1
+        {u32_and(n_e + 1, 0, ap + 1 + 1)} //now already added 3 more elements on stack
+        //stack: h g f e d c b a T0 | t1
 
-        {u32_roll(1)} //pick `e` to top
-        //stack: h g f e d c b a T0 | g t1 e
+        // now 1 more element
+        //stack: h g f e d c b a T0 | t1
         {u32_push(0xffff_ffff)} 
-        //stack: h g f e d c b a T0 | g t1 e '0xffff_ffff'
+        //stack: h g f e d c b a T0 | t1 '0xffff_ffff'
 
-        // now 4 more element
+        // now 2 more element
         // use xor to get !e
-        {u32_xor(1, 0, ap + 1 + 4)} //now already added 4 more elements on stack
+        {u32_xor(n_e + 2, 0, ap + 1 + 2)} //now already added 4 more elements on stack
         
-        //stack: h g f e d c b a T0 | g t1 e !e
-        {u32_roll(1)} //pick `e` to top
-        {u32_drop()} //delete e
-        //stack: h g f e d c b a T0 | g t1 !e
-        {u32_roll(2)} //pick `g` to top
+        //stack: h g f e d c b a T0 | t1 !e
 
         // !e & g
-        //stack: h g f e d c b a T0 | t1 !e g
-        // now 3 more element
-        {u32_and_drop(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
+        //stack: h g f e d c b a T0 | t1 !e
+        // now 2 more element
+        {u32_and(n_g + 2, 0, ap + 1 + 2)} //now already added 3 more elements on stack
         //stack: h g f e d c b a T0 | t1 '!e & g'
 
         // now 2 more element
         //(e & f) ^ (!e & g)
-        {u32_xor(1, 0, ap + 1 + 2)} //now already added 2 more elements on stack
-        //stack: h g f e d c b a T0 | t1 '(e & f) ^ (!e & g)'
+        {u32_xor_drop(1, 0, ap + 1 + 2)} //now already added 2 more elements on stack
+        //stack: h g f e d c b a T0 | '(e & f) ^ (!e & g)'
 
-        {u32_roll(1)} //pick `t1` to top
-        {u32_drop()} //delete t1
+        // now 1 more element
         //stack: h g f e d c b a T0 | '(e & f) ^ (!e & g)'
         
     };
@@ -408,6 +402,7 @@ pub fn round(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
         {u32_add_drop(1, 0)}
         // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | T3
 
+        ////////TODO. Use permutate or others to optimize......
         //calc a'=temp1+temp2
         {u32_add(1, 0)}  // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | a'
         {u32_toaltstack()} // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 
