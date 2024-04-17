@@ -216,7 +216,8 @@ fn Ch(env: &mut Env, ap: u32, e: Ptr, f: Ptr, g: Ptr, delta: u32) -> Script {
         
         // t1 = e & f
         {u32_and(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
-        
+        //stack: h g f e d c b a T0 | g f t1
+
         {u32_roll(1)} //pick `e` to top
         {u32_push(0xffff_ffff)} 
 
@@ -297,25 +298,29 @@ pub fn temp1(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
         //stack: h g f e d c b a T0 T1
         // calc t1 = h + T1
         {u32_pick(n_h)} //pick `h` to top
-        {u32_add_drop(1, 0)} //stack: h g f e d c b a T0 T1 | t1
-
+        //stack: h g f e d c b a T0 T1 | h
+        {u32_add_drop(1, 0)} 
         //stack: h g f e d c b a T0 | t1
-        // calc t2 = t1 + T0
-        {u32_add(0, 1)} //stack: h g f e d c b a | t1 t2
 
+        // calc t2 = t1 + T0
+        {u32_add_drop(0, 1)} 
+        //stack: h g f e d c b a | t2
+
+        // now 1 element less
         // calc t3 = t2 + K_i
-        {u32_pick(n_Ki)} //pick K_i
-        {u32_add_drop(0, 1)} //stack: h g f e d c b a | t1 K_i t3
+        {u32_pick(n_Ki-1)} //pick K_i
+        //stack: h g f e d c b a | t2 K_i
+        {u32_add_drop(0, 1)} 
+        //stack: h g f e d c b a | t3
         //TODO. Do not move `a` for u32_add_drop(a, b), to improve pick and add case.
 
-        //stack: h g f e d c b a | t1 t3
+        //stack: h g f e d c b a | t3
+        // now 1 element less
         // calc t4 = t3 + M_i
-        {u32_pick(n_Mi)} //pick M_i
-        {u32_add_drop(0, 1)} //stack: h g f e d c b a | t1 M_i t4
-        //stack: h g f e d c b a | t1 t4
-
-        {u32_roll(1)}
-        {u32_drop()} //stack: h g f e d c b a | t4
+        {u32_pick(n_Mi-1)} //pick M_i
+        //stack: h g f e d c b a | t3 M_i
+        {u32_add_drop(0, 1)}
+        //stack: h g f e d c b a | t4
 
     };
 
@@ -332,7 +337,9 @@ pub fn maj(env: &mut Env, ap: u32, a: Ptr, b: Ptr, c: Ptr, delta: u32) -> Script
         // while T0 is temp1, T1 is big_s0
 
         {u32_pick(n_a)} //stack: h g f e d c b a T0 T1| a
+        //now 1 element more
         {u32_pick(n_b+1)} //stack: h g f e d c b a T0 T1| a b
+        //now 2 element more
         {u32_pick(n_c+2)} //stack: h g f e d c b a T0 T1| a b c
         {u32_dup()}//stack: h g f e d c b a T0 T1| a b c c
         {u32_toaltstack()}
@@ -353,25 +360,15 @@ pub fn maj(env: &mut Env, ap: u32, a: Ptr, b: Ptr, c: Ptr, delta: u32) -> Script
         {u32_fromaltstack()} //stack: h g f e d c b a T0 T1| t1 t2 a c
         //alt: 
         // t3 = a & c
-        /*{u32_and(1, 0, ap + 1 + 4)} //now already added 4 more elements on stack
-        //stack: h g f e d c b a T0 T1| t1 t2 a t3
-        {u32_roll(1)} 
-        {u32_drop()}*/
         {u32_and_drop(1, 0, ap + 1 + 4)} //now already added 4 more elements on stack
         //stack: h g f e d c b a T0 T1| t1 t2 t3
 
         // t4 = t2 ^ t3
-        {u32_xor(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
-        //stack: h g f e d c b a T0 T1| t1 t2 t4
-        {u32_roll(1)} 
-        {u32_drop()}
+        {u32_xor_drop(1, 0, ap + 1 + 3)} //now already added 3 more elements on stack
         //stack: h g f e d c b a T0 T1| t1 t4
 
         // t5 = t1 ^ t4
-        {u32_xor(1, 0, ap + 1 + 2)} //now already added 2 more elements on stack
-        //stack: h g f e d c b a T0 T1| t1 t5
-        {u32_roll(1)} 
-        {u32_drop()}
+        {u32_xor_drop(1, 0, ap + 1 + 2)} //now already added 2 more elements on stack
         //stack: h g f e d c b a T0 T1| t5 
     };
     script
@@ -399,9 +396,8 @@ pub fn round(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
         //stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 T1 T2
         // while T0 is temp1, T1 is big_s0, T2 is maj
         // calc T3=temp2=big_20+maj=T1+T2
-        {u32_add(1, 0)} // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 T1 | T3
-        {u32_roll(1)}
-        {u32_drop()} // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | T3
+        {u32_add_drop(1, 0)}
+        // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | T3
 
         //calc a'=temp1+temp2
         {u32_add(1, 0)}  // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | a'
@@ -473,24 +469,20 @@ fn SMALL_S0(env: &mut Env, ap: u32, m: Ptr, delta: u32) -> Script {
     let n = env.ptr(m) + delta;
     let script = script! {
         {u32_pick(n)} //stack: h g f e d c b a | m
-        {u32_dup()} //stack: h g f e d c b a | m m
-        {u32_dup()} //stack: h g f e d c b a | m m m
-        {u32_shr(3, ap + 1 + 3)} // already 3 more elements
-        {u32_roll(1)} //move `m` to top
+        // now 1 more element
+        {u32_shr(3, ap + 1 + 1)} // already 3 more elements
+        {u32_pick(n+1)} //copy `m` to top
         {u32_rrot(18)}
-        {u32_roll(2)} //move `m` to top
+        {u32_pick(n+2)} //copy `m` to top
         {u32_rrot(7)}
 
+        // now 3 more element
         // RotR(X,7)\oplus RotR(X,18)
-        {u32_xor(0, 1, ap + 1 + 3)} //now already added 3 more elements on stack
-        {u32_roll(1)} //remove the duplicate value
-        {u32_drop()}
+        {u32_xor_drop(0, 1, ap + 1 + 3)} //now already added 3 more elements on stack
 
+        // now 2 more element
         // RotR(X,7)\oplus RotR(X,18)\oplus ShR(X,3)
-        {u32_xor(0, 1, ap + 1 + 2)} //now already added 2 more elements on stack
-        {u32_roll(1)} //remove the duplicate value
-        {u32_drop()}
-
+        {u32_xor_drop(0, 1, ap + 1 + 2)} //now already added 2 more elements on stack
     };
 
     script
@@ -500,24 +492,19 @@ fn SMALL_S1(env: &mut Env, ap: u32, m: Ptr, delta: u32) -> Script {
     let n = env.ptr(m) + delta;
     let script = script! {
         {u32_pick(n)} //stack: h g f e d c b a S0 | m
-        {u32_dup()} //stack: h g f e d c b a S0 | m m
-        {u32_dup()} //stack: h g f e d c b a S0 | m m m
-        {u32_shr(10, ap + 1 + 3)} // already 3 more elements
-        {u32_roll(1)} //move `m` to top
+        //now 1 more element
+        {u32_shr(10, ap + 1 + 1)} // already 3 more elements
+        {u32_pick(n+1)} //copy `m` to top
         {u32_rrot(19)}
-        {u32_roll(2)} //move `m` to top
+        {u32_pick(n+2)} //copy `m` to top
         {u32_rrot(17)}
 
+        // now 3 more element
         // RotR(X,17)\oplus RotR(X,19)
-        {u32_xor(0, 1, ap + 1 + 3)} //now already added 3 more elements on stack
-        {u32_roll(1)} //remove the duplicate value
-        {u32_drop()}
+        {u32_xor_drop(0, 1, ap + 1 + 3)} //now already added 3 more elements on stack
 
         // RotR(X,17)\oplus RotR(X,119)\oplus ShR(X,10)
-        {u32_xor(0, 1, ap + 1 + 2)} //now already added 2 more elements on stack
-        {u32_roll(1)} //remove the duplicate value
-        {u32_drop()}
-
+        {u32_xor_drop(0, 1, ap + 1 + 2)} //now already added 2 more elements on stack
     };
 
     script
@@ -533,24 +520,15 @@ fn calc_Wi(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
         {u32_pick(n_mi16)} //get w[i16]
         {u32_pick(n_m_i_9+1)} //get w[(i + 9) & 0xF]
         // stack: h g f e d c b a | S0 S1 w16 w9
-        {u32_add(1, 0)} // t1=w16+w9
-        {u32_roll(1)}
-        {u32_drop()}
+        {u32_add_drop(1, 0)} // t1=w16+w9
         //now 3 more element on stack
         // stack: h g f e d c b a | S0 S1 t1
-        {u32_add(1, 0)} // t2=S1+t1
-        {u32_roll(1)}
-        {u32_drop()}
+        {u32_add_drop(1, 0)} // t2=S1+t1
         //now 2 more element on stack
         // stack: h g f e d c b a | S0 t2
-        {u32_add(1, 0)} // t3=S0+t2
-        //now 2 more element on stack
-        // stack: h g f e d c b a | S0 t3
-        {u32_roll(1)}
-        {u32_drop()}
+        {u32_add_drop(1, 0)} // t3=S0+t2
         //now 1 more element on stack
         // stack: h g f e d c b a | t3
-
     };
 
     script
@@ -562,9 +540,7 @@ fn final_add() -> Script {
         for _ in 0..INITIAL_STATE_SIZE {
             {u32_roll(7 + STATE_TO_TOP_SIZE)} //h
             {u32_fromaltstack()} //h'
-            {u32_add(1,0)}
-            {u32_roll(1)}
-            {u32_drop()}
+            {u32_add_drop(1,0)}
         }
         // stack: [Message] h g f e d c b a
         // alt: 
