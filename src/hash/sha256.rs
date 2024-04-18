@@ -600,11 +600,35 @@ fn calc_Wi(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
         {u32_add_drop(1, 0)}
         // stack: h g f e d c b a  | 'S0+S1'
         // now 1 element less
+        {u32_add(n_m_i_9 - 1, 0)}
+        // stack: h g f e d c b a  | 'S0+S1+w9'
+        // now 1 element less
         {u32_add(n_mi16 - 1, 0)}
-        // stack: h g f e d c b a  | 'S0+S1+w[i16]'
+        // stack: h g f e d c b a  | 'S0+S1+w9+w[i16]' 
+    };
+
+    script
+}
+
+// for 16=<i<64, W[i]=\sigma_1(W[i-2]) + W[i-7] + \simga_0(W[i-15]) + W[i-16] 
+fn calc_Wi_debug(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
+    let n_mi16 = env.ptr(M(i16)) + delta;
+    let n_m_i_9 = env.ptr(M((i+9) & 0xF)) + delta;
+    let script = script! {
+        // stack: h g f e d c b a S0 S1 | 
+        {u32_add_drop(1, 0)}
+        // stack: h g f e d c b a  | 'S0+S1'
         // now 1 element less
         {u32_add(n_m_i_9 - 1, 0)}
-        // stack: h g f e d c b a  | 'S0+S1+w[i16]+w9'
+        // stack: h g f e d c b a  | 'S0+S1+w9'
+        // now 1 element less
+        // env: M(15):x+15, M(14):x+14,...,M(i16):x+i16,...,M(1):x+1, M:(0):x
+        {u32_add_drop(0, env.ptr_extract(M(i16)) + delta - 1)}
+        // now 2 element less
+        // stack: h g f e d c b a  | 'S0+S1+w9+w[i16]' 
+        // env: M(15):x+14, M(14):x+13,...,...,M(1):x+1, M:(0):x
+        {env.ptr_insert_in_script(M(i16))}
+        // env: M(15):x+15, M(14):x+14,...,...,M(1):x+2, M:(0):x+1, M(i16):x+i16
     };
 
     script
@@ -624,14 +648,19 @@ fn final_add() -> Script {
     )
 }
 
-fn final_add_debug() -> Script {
+fn final_add_debug(env: &mut Env) -> Script {
     script!(
         // stack: h g f e d c b a [STATE_TO_TOP_SIZE]
         // alt: a' b' c' d' e' f' g' h'
-        for _ in 0..INITIAL_STATE_SIZE {
-            {u32_roll(7 + STATE_TO_TOP_SIZE)} //h
+        for i in 0..INITIAL_STATE_SIZE {
+            /*{u32_roll(7 + STATE_TO_TOP_SIZE)} //h
             {u32_fromaltstack()} //h'
-            {u32_add_drop(1,0)}
+            {u32_add_drop(1,0)}*/
+            // stack: S(7):7, S(6):6, S(5):5, S(4):4, S(3):3, S(2):2, S(1):1, S(0):0
+            {u32_fromaltstack()} //h'
+            // 1 more element
+            {u32_add_drop(0, env.ptr_extract(S(7-i))+1)}
+            {env.ptr_insert_in_script(S(7-i))}
         }
         // stack: [Message] h g f e d c b a
         // alt: 
@@ -659,18 +688,20 @@ fn compress(env: &mut Env, ap: u32) -> Script {
             // now 2 more elements on stack
             // stack: h g f e d c b a | S0 S1 
             
-            {calc_Wi(env, i, i & 0xF, 2)}
+            {calc_Wi_debug(env, i, i & 0xF, 2)}
+            //{calc_Wi(env, i, i & 0xF, 2)}
             
             //now 1 more element on stack
             // stack: h g f e d c b a | t3
-            {save_wi16_swap(env, M(i & 0xF), 1)}
+            //{save_wi16_swap(env, M(i & 0xF), 1)}
             
             //now no additional elements on stack
             // stack: h g f e d c b a wi16
             {round(env, ap, i, i & 0xF)}
         }
 
-        {final_add()}
+        //{final_add()}
+        {final_add_debug(env)}
     }
 }
 
