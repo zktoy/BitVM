@@ -98,6 +98,8 @@ pub trait EnvTrait {
     fn ptr_insert(&mut self, ptr: Ptr);
 
     fn ptr_insert_in_script(&mut self, ptr: Ptr) -> Script;
+
+    fn ptr_delete_in_script(&mut self, ptr: Ptr) -> Script;
 }
 
 impl EnvTrait for Env {
@@ -113,6 +115,20 @@ impl EnvTrait for Env {
             *value += 1;
         }
         self.insert(ptr, 0);
+        script!()
+    }
+
+    fn ptr_delete_in_script(&mut self, ptr: Ptr) -> Script {
+        match self.remove(&ptr) {
+            Some(index) => {
+                for (_, value) in self.iter_mut() {
+                    if index < *value {
+                        *value -= 1;
+                    }
+                }
+            }
+            None => {},
+        }
         script!()
     }
 
@@ -379,87 +395,6 @@ pub fn maj(env: &mut Env, ap: u32, a: Ptr, b: Ptr, c: Ptr, delta: u32) -> Script
     script
 }
 
-pub fn round(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
-    let script = script! {
-        // calc T0 = \Sigma_1(e)
-        {BIG_S1(env, ap, S(4), 0) } // S(4)->e
-        
-        // now 1 more element on stack 
-        // calc T1 = Ch(e,f,g)
-        {Ch(env, ap + 1, S(4), S(5), S(6), 1)}
-
-        // now 2 more element on stack 
-        {temp1(env, i, i16, 2)}
-
-        // now 1 more element on stack 
-        {BIG_S0(env, ap + 1, S(0), 1) } // S(0)->a
-
-        // now 2 more element on stack 
-        {maj(env, ap + 2, S(0), S(1), S(2), 2) }
-
-        // now 3 more element on stack 
-        //stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 T1 T2
-        // while T0 is temp1, T1 is big_s0, T2 is maj
-        // calc T3=temp2=big_20+maj=T1+T2
-        {u32_add_drop(1, 0)}
-        // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | T3
-
-        ////////TODO. Use permutate or others to optimize......
-        //calc a'=temp1+temp2
-        {u32_add(1, 0)}  // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | a'
-        {u32_toaltstack()} // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 
-        // alt: a'
-
-        // now 1 more element on stack
-        {u32_pick(env.ptr(S(0))+1)} //a, 
-        {u32_toaltstack()} // alt: a' b'
-
-        {u32_pick(env.ptr(S(1))+1)} //b
-        {u32_toaltstack()} // alt: a' b' c'
-
-        {u32_pick(env.ptr(S(2))+1)} //c
-        {u32_toaltstack()} // alt: a' b' c' d'
-
-        // stack: h g f e d c b a T0 
-        {u32_pick(env.ptr(S(3))+1)} //d
-        {u32_add(1, 0)} //d+temp1
-        {u32_toaltstack()} // alt: a' b' c' d' e'
-        
-        {u32_pick(env.ptr(S(4))+1)} //e
-        {u32_toaltstack()} // alt: a' b' c' d' e' f'
-
-        {u32_pick(env.ptr(S(5))+1)} //f
-        {u32_toaltstack()} // alt: a' b' c' d' e' f' g'
-
-        {u32_pick(env.ptr(S(6))+1)} //g
-        {u32_toaltstack()} // alt: a' b' c' d' e' f' g' h'
-
-        // stack: h g f e d c b a T0 
-        {u32_drop()} // stack: h g f e d c b a
-
-        for _ in 0..INITIAL_STATE_SIZE {
-            {u32_fromaltstack()}
-        }
-        
-        // stack: h g f e d c b a [STATE_TO_TOP_SIZE]| h‘ g’ f‘ e’ d‘ c’ b‘ a’
-        // now 8 more elements on stack
-        for _ in 0..INITIAL_STATE_SIZE {
-            {u32_roll(INITIAL_STATE_SIZE + STATE_TO_TOP_SIZE)}
-            {u32_drop()}
-        }
-
-        // TODO: can be optimized with env?
-        // stack: [STATE_TO_TOP_SIZE] | h‘ g’ f‘ e’ d‘ c’ b‘ a’
-        for _ in 0..STATE_TO_TOP_SIZE {
-            {u32_roll(INITIAL_STATE_SIZE+STATE_TO_TOP_SIZE-1)}
-        }
-        // stack: h‘ g’ f‘ e’ d‘ c’ b‘ a’ [STATE_TO_TOP_SIZE] 
-    };
-    println!("round env: {:?}", env);
-    script
-
-}
-
 const STATE_PERMUTATE: [u32; 8] = [7, 0, 1, 2, 3, 4, 5, 6];
 
 //Script added cause we are getting Non pushable error otherwise, not sure how to...
@@ -475,7 +410,7 @@ pub fn state_permute(env: &mut Env) -> Script {
 
     return script! {};
 }
-pub fn round_debug(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
+pub fn round(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
     let script = script! {
         // calc T0 = \Sigma_1(e)
         {BIG_S1(env, ap, S(4), 0) } // S(4)->e
@@ -531,7 +466,7 @@ pub fn round_debug(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
         // env: ..., M(0):8, S(7):7, S(6):6, S(5):5, S(3):4, S(2):3, S(1):2, S(0):1, S(4):0
 
     };
-    println!("DEBUG round env: {:?}", env);
+    //println!("DEBUG round env: {:?}", env);
     script
 }
 
@@ -603,26 +538,6 @@ fn calc_Wi(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
         {u32_add(n_m_i_9 - 1, 0)}
         // stack: h g f e d c b a  | 'S0+S1+w9'
         // now 1 element less
-        {u32_add(n_mi16 - 1, 0)}
-        // stack: h g f e d c b a  | 'S0+S1+w9+w[i16]' 
-    };
-    println!("calc_Wi env: {:?}", env);
-
-    script
-}
-
-// for 16=<i<64, W[i]=\sigma_1(W[i-2]) + W[i-7] + \simga_0(W[i-15]) + W[i-16] 
-fn calc_Wi_debug(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
-    let n_mi16 = env.ptr(M(i16)) + delta;
-    let n_m_i_9 = env.ptr(M((i+9) & 0xF)) + delta;
-    let script = script! {
-        // stack: h g f e d c b a S0 S1 | 
-        {u32_add_drop(1, 0)}
-        // stack: h g f e d c b a  | 'S0+S1'
-        // now 1 element less
-        {u32_add(n_m_i_9 - 1, 0)}
-        // stack: h g f e d c b a  | 'S0+S1+w9'
-        // now 1 element less
         // env: M(15):x+15, M(14):x+14,...,M(i16):x+i16,...,M(1):x+1, M:(0):x
         {u32_add_drop(0, env.ptr_extract(M(i16)) + delta - 1)}
         // now 2 element less
@@ -631,25 +546,11 @@ fn calc_Wi_debug(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
         {env.ptr_insert_in_script(M(i16))}
         // env: M(15):x+15, M(14):x+14,...,...,M(1):x+2, M:(0):x+1, M(i16):x+i16
     };
-    println!("DEBUG calc_Wi env: {:?}", env);
+    //println!("DEBUG calc_Wi env: {:?}", env);
     script
 }
 
-fn final_add() -> Script {
-    script!(
-        // stack: h g f e d c b a [STATE_TO_TOP_SIZE]
-        // alt: a' b' c' d' e' f' g' h'
-        for _ in 0..INITIAL_STATE_SIZE {
-            {u32_roll(7 + STATE_TO_TOP_SIZE)} //h
-            {u32_fromaltstack()} //h'
-            {u32_add_drop(1,0)}
-        }
-        // stack: [Message] h g f e d c b a
-        // alt: 
-    )
-}
-
-fn final_add_debug(env: &mut Env) -> Script {
+fn final_add(env: &mut Env) -> Script {
     script!(
         // stack: h g f e d c b a [STATE_TO_TOP_SIZE]
         // alt: a' b' c' d' e' f' g' h'
@@ -672,14 +573,14 @@ fn compress(env: &mut Env, ap: u32) -> Script {
     script! {
         /////////////DEBUG
         //{round(env, ap, 0, 0 & 0xF)}
-        /*{round_debug(env, ap, 0, 0 & 0xF)}
+        /*{round(env, ap, 0, 0 & 0xF)}
         for i in 0..INITIAL_STATE_SIZE {
             {u32_pick(env.ptr(S(7-i)) + i)}
         }*/
         /////////////DEBUG
 
         for i in 0..16{ //16
-            {round_debug(env, ap, i, i & 0xF)}
+            {round(env, ap, i, i & 0xF)}
         }
 
         for i in 16..64{ //64
@@ -689,38 +590,15 @@ fn compress(env: &mut Env, ap: u32) -> Script {
             // now 2 more elements on stack
             // stack: h g f e d c b a | S0 S1 
             
-            {calc_Wi_debug(env, i, i & 0xF, 2)}
-            /*{calc_Wi(env, i, i & 0xF, 2)}
-            //now 1 more element on stack
-            // stack: h g f e d c b a | t3
-            {save_wi16_swap(env, M(i & 0xF), 1)}*/
+            {calc_Wi(env, i, i & 0xF, 2)}
             
             //now no additional elements on stack
             // stack: h g f e d c b a wi16
-            {round_debug(env, ap, i, i & 0xF)}
+            {round(env, ap, i, i & 0xF)}
         }
 
-        {final_add_debug(env)}
+        {final_add(env)}
     }
-}
-
-fn save_wi16_swap(env: &mut Env, m: Ptr, delta: u32) -> Script {
-    let n = env.ptr(m) + delta;
-
-    let script = script!(
-        for _ in 0..(n-1){
-            {u32_roll(1)}
-            {u32_toaltstack()}
-        }
-        //drop the specific element
-        {u32_roll(1)}
-        {u32_drop()}
-        //put back others
-        for _ in 0..(n-1){
-            {u32_fromaltstack()}
-        }
-    );
-    script
 }
 
 pub fn stack_initial(env: &mut Env, main_msg: &mut [u8], alt_msg: Vec<&[u8]>) -> Script {
@@ -763,121 +641,6 @@ pub fn sha256(chunk_count: u32, message: &[u8], repeated_count: u32) -> Script {
 
         // stack now is: [K32] [XOR_Table] [Message] [State]
         for _ in 1..chunk_count{
-            // put the previous state to alt stack
-            for _ in 0..8{
-                {u32_toaltstack()}
-            }
-            //drop the previous message chunk
-            for _ in 0..MESSAGE_SIZE {
-                {u32_drop()}
-            }
-
-            //put the previous state back to stack
-            for _ in 0..8{
-                {u32_fromaltstack()}
-            }
-
-            for _ in 0..MESSAGE_SIZE {
-                {u32_fromaltstack()}
-            }
-
-            // stack now is: [K32] [XOR_Table] [State] [Message]
-            for _ in 0..INITIAL_STATE_SIZE{
-                {u32_roll(MESSAGE_SIZE+INITIAL_STATE_SIZE-1)}
-            }
-
-            // stack now is: [K32] [XOR_Table] [Message] [State]
-            // alt stack: [uncompressed rest Message]
-            // copy previous block state to alt stack
-            {copy_state_to_altstack(&mut env)}
-
-            // stack now is: [K32] [XOR_Table] [Message] [State]
-            // alt stack: [uncompressed rest Message] [State]
-            // Perform a round of SHA256
-            {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
-        }
-
-        
-        // Finshed the result=SHA256(m) now.
-        // stack now is: [K32] [XOR_Table] [Message] [State]
-        for _ in 1..repeated_count {
-            // to run SHA256(m)
-            // put the previous state to alt stack
-            for _ in 0..8{
-                {u32_toaltstack()}
-            }
-            // stack now is: [K32] [XOR_Table] [Message]
-            //drop the previous message chunk
-            for _ in 0..MESSAGE_SIZE {
-                {u32_drop()}
-            }
-            // stack now is: [K32] [XOR_Table] 
-            //put the PADD_32BYTES to stack first
-            for i in 0..8{
-                {u32_push(PADD_32BYTES[7-i])}
-            }
-            
-            //put the previous state back to stack as [m8,...,m0]
-            for _ in 0..8{
-                {u32_fromaltstack()}
-            }
-
-            // stack now is: [K32] [XOR_Table] [Message]
-
-            // Push the initial Block state onto the stack
-            {initial_state()} // a new SHA256, need to reset the state
-            // stack now is: [K32] [XOR_Table] [Message] [State]
-            // alt stack: []
-            // copy previous block state to alt stack
-            {copy_state_to_altstack(&mut env)}
-
-            // stack now is: [K32] [XOR_Table] [Message] [State]
-            // alt stack: [State]
-            // Perform a round of SHA256
-            {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
-            
-        }
-
-        // Save the hash
-        for _ in 0..8{
-            {u32_toaltstack()}
-        }
-
-        // Clean up the input data and the other half of the state
-        for _ in 0..K32_SIZE+MESSAGE_SIZE {
-            {u32_drop()}
-        }
-
-        // Drop the lookup table
-        u8_drop_xor_table
-
-        // Load the hash
-        for _ in 0..8{
-            {u32_fromaltstack()}
-        }
-    };
-
-    script
-}
-
-/// SHA256 taking a 64-byte padded message 
-/// SHA256(SHA256(..(SHA256(m)))), repated to run SHA256 `repeated_count` times.
-/// and returning a 32-byte digest
-pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Script {
-    let mut env = ptr_init();
-    let message_array: Vec<&[u8]> = message.chunks(64).collect();
-    let mut first_chunk: Vec<u8> = message[0..64].to_vec();
-
-    let alt_message: Vec<&[u8]> = message_array[1..].to_vec();
-    let script = script! {
-        // put all initial data to stack
-        {stack_initial(&mut env, &mut first_chunk, alt_message)}
-        // stack now is: [K32] [XOR_Table] [Message] [State]
-        // Perform a round of SHA256
-        {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
-
-        // stack now is: [K32] [XOR_Table] [Message] [State]
-        for _ in 1..chunk_count{
             //drop the previous message chunk
             for i in 0..MESSAGE_SIZE {
                 {u32_roll(env.ptr_extract(M(i)))}
@@ -906,23 +669,19 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
         // stack now is: [K32] [XOR_Table] [Message] [State]
         for _ in 1..repeated_count {
             // to run SHA256(m)
-            /*// put the previous state to alt stack
-            for _ in 0..8{
+            // put the previous state to alt stack
+            for i in 0..INITIAL_STATE_SIZE{
+                {env.ptr_delete_in_script(S(i))}
                 {u32_toaltstack()}
             }
             // stack now is: [K32] [XOR_Table] [Message]
             //drop the previous message chunk
-            for _ in 0..MESSAGE_SIZE {
-                {u32_drop()}
-            }*/
-
-            // stack now is: [K32] [XOR_Table] [Message] [State]
-            //drop the previous message chunk
             for i in 0..MESSAGE_SIZE {
-                {u32_roll(env.ptr_extract(M(i)))}
+                {env.ptr_delete_in_script(M(i))}
                 {u32_drop()}
             }
-            // stack now is: [K32] [XOR_Table] [State]
+
+            // stack now is: [K32] [XOR_Table]
             //put the PADD_32BYTES to stack first
             for i in 0..PADD_32BYTES.len(){
                 {u32_push(PADD_32BYTES[PADD_32BYTES.len() - 1 -i])}
@@ -939,6 +698,11 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
 
             // Push the initial Block state onto the stack
             {initial_state()} // a new SHA256, need to reset the state
+            //reinitialize State env
+            for i in 0..INITIAL_STATE_SIZE {
+                {env.ptr_insert_in_script(S(INITIAL_STATE_SIZE -1 - i))}
+            }
+
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: []
             // copy previous block state to alt stack
@@ -1088,54 +852,12 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256_debug(chunk_count, & message, repeated_count)}
+            {sha256(chunk_count, & message, repeated_count)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
             }
             OP_TRUE
-        };
-        let res = execute_script(script.clone());
-        println!("script size:{:?}, max_nb_stack_items:{:?}", script.len(), res.stats.max_nb_stack_items);
-        assert!(res.success);
-    }
-
-    #[test]
-    fn test_env() {
-        //3 block size
-        //let s = String::from("hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world hello world");
-        //2 block size
-        //let s = String::from("hello world hello world hello world hello world hello world");
-        //1 block size
-        let s = String::from("hello world");
-        
-        let mut hasher = Sha256::new();
-        hasher.update(s.clone());
-        // Note that calling `finalize()` consumes hasher
-        let expected_hash = hasher.finalize();
-        println!("Expected hash: {:x}", expected_hash);
-
-        // change [u8] to [u32]
-        let mut hash_out: Vec<u32> = Vec::new();
-        let hash_u8_array: Vec<&[u8]> = expected_hash.chunks(4).collect();
-        for i in 0..hash_u8_array.len() {
-            let b = hex::encode(&hash_u8_array[i]);
-            hash_out.extend([(i64::from_str_radix(&b, 16).unwrap()) as u32 ])
-        }
-
-        let input = s.into_bytes();
-
-        let message = pad(input);
-        let msg_len = message.len() * 8; // multiply 8 for is u8 vector
-        assert_eq!( msg_len % 512, 0);
-        let chunk_count = (msg_len / 512) as u32;
-        let script = script! {
-            {sha256_debug(chunk_count, & message, 1)}
-            /*for i in 0..8{
-                {u32_push(hash_out[i])}
-                {u32_equalverify()}
-            }
-            OP_TRUE*/
         };
         let res = execute_script(script.clone());
         println!("script size:{:?}, max_nb_stack_items:{:?}", script.len(), res.stats.max_nb_stack_items);
@@ -1202,7 +924,7 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256_debug(chunk_count, & message, 1)}
+            {sha256(chunk_count, & message, 1)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
@@ -1244,7 +966,7 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256_debug(chunk_count, & message, 1)}
+            {sha256(chunk_count, & message, 1)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
@@ -1286,7 +1008,7 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256_debug(chunk_count, & message, 1)}
+            {sha256(chunk_count, & message, 1)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
