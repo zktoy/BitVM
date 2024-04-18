@@ -96,6 +96,8 @@ pub trait EnvTrait {
 
     /// Set the position of `ptr` to the top stack ptr
     fn ptr_insert(&mut self, ptr: Ptr);
+
+    fn ptr_insert_in_script(&mut self, ptr: Ptr) -> Script;
 }
 
 impl EnvTrait for Env {
@@ -104,6 +106,14 @@ impl EnvTrait for Env {
             *value += 1;
         }
         self.insert(ptr, 0);
+    }
+
+    fn ptr_insert_in_script(&mut self, ptr: Ptr) -> Script {
+        for (_, value) in self.iter_mut() {
+            *value += 1;
+        }
+        self.insert(ptr, 0);
+        script!()
     }
 
     fn ptr_extract(&mut self, ptr: Ptr) -> u32 {
@@ -445,9 +455,84 @@ pub fn round(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
         }
         // stack: h‘ g’ f‘ e’ d‘ c’ b‘ a’ [STATE_TO_TOP_SIZE] 
     };
-
+    println!("round env: {:?}", env);
     script
 
+}
+
+const STATE_PERMUTATE: [u32; 8] = [7, 0, 1, 2, 3, 4, 5, 6];
+
+//Script added cause we are getting Non pushable error otherwise, not sure how to...
+pub fn state_permute(env: &mut Env) -> Script {
+    let mut prev_env = Vec::new();
+    for i in 0..8 {
+        prev_env.push(env.ptr(S(i)));
+    }
+
+    for i in 0..8 {
+        env.insert(S(i as u32), prev_env[STATE_PERMUTATE[i] as usize]);
+    }
+
+    return script! {};
+}
+pub fn round_debug(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
+    let script = script! {
+        // calc T0 = \Sigma_1(e)
+        {BIG_S1(env, ap, S(4), 0) } // S(4)->e
+        
+        // now 1 more element on stack 
+        // calc T1 = Ch(e,f,g)
+        {Ch(env, ap + 1, S(4), S(5), S(6), 1)}
+
+        // now 2 more element on stack 
+        {temp1(env, i, i16, 2)}
+
+        // now 1 more element on stack 
+        {BIG_S0(env, ap + 1, S(0), 1) } // S(0)->a
+
+        // now 2 more element on stack 
+        {maj(env, ap + 2, S(0), S(1), S(2), 2) }
+
+        // now 3 more element on stack 
+        //stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 T1 T2
+        // while T0 is temp1, T1 is big_s0, T2 is maj
+        // calc T3=temp2=big_20+maj=T1+T2
+        {u32_add_drop(1, 0)}
+        // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | T3
+
+        ////////TODO. Use permutate or others to optimize......
+        //calc a'=temp1+temp2
+        {u32_add(1, 0)}  
+        // stack: h g f e d c b a [STATE_TO_TOP_SIZE] T0 | a'
+        // env: ..., M(0):8, S(7):7, S(6):6, S(5):5, S(4):4, S(3):3, S(2):2, S(1):1, S(0):0
+        
+        // now 2 more element
+        // drop 'h' for is not useful anymore
+        {u32_roll(env.ptr_extract(S(7)) + 2)}
+        {u32_drop()}
+        // env: ..., M(0):7, S(6):6, S(5):5, S(4):4, S(3):3, S(2):2, S(1):1, S(0):0
+        // stack: g f e d c b a [STATE_TO_TOP_SIZE] T0 | a'
+        {env.ptr_insert_in_script(S(7))}
+        // env: ..., M(0):8, S(6):7, S(5):6, S(4):5, S(3):4, S(2):3, S(1):2, S(0):1, S(7):0
+        // stack: g f e d c b a [STATE_TO_TOP_SIZE] T0 | a'
+        // const STATE_PERMUTATE: [u32; 8] = [7, 0, 1, 2, 3, 4, 5, 6];
+        {state_permute(env)}
+        // env: ..., M(0):8, S(7):7, S(6):6, S(5):5, S(4):4, S(3):3, S(2):2, S(1):1, S(0):0
+        // stack: h' g' f' e' d' c' b' [STATE_TO_TOP_SIZE] T0 | a'
+        
+        // now 1 more element
+        // stack: h' g' f' e' d' c' b' [STATE_TO_TOP_SIZE] T0 | a'
+        // update e'=e'+T0, where T0=temp1
+        {u32_add_drop(1, env.ptr_extract(S(4)) + 1)} //
+        // stack: h' g' f' d' c' b' [STATE_TO_TOP_SIZE] | a' e'
+        // env: ..., M(0):7, S(7):6, S(6):5, S(5):4, S(3):3, S(2):2, S(1):1, S(0):0
+        {env.ptr_insert_in_script(S(4))}
+        // stack: h' g' f' d' c' b' [STATE_TO_TOP_SIZE] | a' e'
+        // env: ..., M(0):8, S(7):7, S(6):6, S(5):5, S(3):4, S(2):3, S(1):2, S(0):1, S(4):0
+
+    };
+    println!("DEBUG round env: {:?}", env);
+    script
 }
 
 fn copy_state_to_altstack() -> Script {
@@ -539,8 +624,30 @@ fn final_add() -> Script {
     )
 }
 
+fn final_add_debug() -> Script {
+    script!(
+        // stack: h g f e d c b a [STATE_TO_TOP_SIZE]
+        // alt: a' b' c' d' e' f' g' h'
+        for _ in 0..INITIAL_STATE_SIZE {
+            {u32_roll(7 + STATE_TO_TOP_SIZE)} //h
+            {u32_fromaltstack()} //h'
+            {u32_add_drop(1,0)}
+        }
+        // stack: [Message] h g f e d c b a
+        // alt: 
+    )
+}
+
 fn compress(env: &mut Env, ap: u32) -> Script {
     script! {
+        /////////////DEBUG
+        //{round(env, ap, 0, 0 & 0xF)}
+        /*{round_debug(env, ap, 0, 0 & 0xF)}
+        for i in 0..INITIAL_STATE_SIZE {
+            {u32_pick(env.ptr(S(7-i)) + i)}
+        }*/
+        /////////////DEBUG
+
         for i in 0..16{ //16
             {round(env, ap, i, i & 0xF)}
         }
@@ -735,12 +842,9 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
     let script = script! {
         // put all initial data to stack
         {stack_initial(&mut first_chunk, alt_message)}
-
-        {u32_add(env.ptr(S(2)), env.ptr_extract(S(1)))}
-
         // stack now is: [K32] [XOR_Table] [Message] [State]
         // Perform a round of SHA256
-        /*{compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
+        {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
 
         // stack now is: [K32] [XOR_Table] [Message] [State]
         for _ in 1..chunk_count{
@@ -835,9 +939,9 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
         // Load the hash
         for _ in 0..8{
             {u32_fromaltstack()}
-        }*/
+        }
     };
-    println!("ZYD env: {:?}", env);
+
     script
 }
 
@@ -1070,7 +1174,7 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256(chunk_count, & message, 1)}
+            {sha256_debug(chunk_count, & message, 1)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
