@@ -814,6 +814,7 @@ mod tests {
     use bitcoin::opcodes::OP_TRUE;
     use bitcoin::script;
     use hex::ToHex;
+    use serde::de::value;
     use sha2::{Sha256, Digest};
 
     #[test]
@@ -866,7 +867,7 @@ mod tests {
 
     #[test]
     fn test_bench_shr() {
-        let bits_cared = [2, 3, 6, 7, 10, 11, 13, 17, 18, 19, 22, 25];
+        let bits_cared = [2, 3, 6, 7, 10, 11, 12, 13, 17, 18, 19, 22, 25];
 
         for i in 0..bits_cared.len() {
             let script_now = script! {
@@ -879,9 +880,16 @@ mod tests {
         }
     }
 
+    fn rrot(x: u32, n: usize) -> u32 {
+        if n == 0 {
+            return x;
+        }
+        (x >> n) | (x << (32 - n))
+    }
+
     #[test]
     fn test_bench_rrot() {
-        let bits_cared = [2, 3, 6, 7, 10, 11, 13, 17, 18, 19, 22, 25];
+        let bits_cared = [2, 3, 6, 7, 10, 11, 12, 13, 17, 18, 19, 22, 25];
 
         for i in 0..bits_cared.len() {
             let script_now = script! {
