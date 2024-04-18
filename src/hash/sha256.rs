@@ -878,33 +878,17 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
 
         // stack now is: [K32] [XOR_Table] [Message] [State]
         for _ in 1..chunk_count{
-            // put the previous state to alt stack
-            /*for _ in 0..8{
-                {u32_toaltstack()}
-            }
             //drop the previous message chunk
-            for _ in 0..MESSAGE_SIZE {
-                {u32_drop()}
-            }*/
             for i in 0..MESSAGE_SIZE {
                 {u32_roll(env.ptr_extract(M(i)))}
                 {u32_drop()}
             }
 
-            /*//put the previous state back to stack
-            for _ in 0..8{
-                {u32_fromaltstack()}
-            }*/
-
+            //put the previous state back to stack
             for i in 0..MESSAGE_SIZE {
                 {u32_fromaltstack()}
                 {env.ptr_insert_in_script(M(MESSAGE_SIZE - 1 - i))}
             }
-
-            // stack now is: [K32] [XOR_Table] [State] [Message]
-            /*for _ in 0..INITIAL_STATE_SIZE{
-                {u32_roll(MESSAGE_SIZE+INITIAL_STATE_SIZE-1)}
-            }*/
 
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: [uncompressed rest Message]
@@ -922,7 +906,7 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
         // stack now is: [K32] [XOR_Table] [Message] [State]
         for _ in 1..repeated_count {
             // to run SHA256(m)
-            // put the previous state to alt stack
+            /*// put the previous state to alt stack
             for _ in 0..8{
                 {u32_toaltstack()}
             }
@@ -930,16 +914,25 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
             //drop the previous message chunk
             for _ in 0..MESSAGE_SIZE {
                 {u32_drop()}
+            }*/
+
+            // stack now is: [K32] [XOR_Table] [Message] [State]
+            //drop the previous message chunk
+            for i in 0..MESSAGE_SIZE {
+                {u32_roll(env.ptr_extract(M(i)))}
+                {u32_drop()}
             }
-            // stack now is: [K32] [XOR_Table] 
+            // stack now is: [K32] [XOR_Table] [State]
             //put the PADD_32BYTES to stack first
-            for i in 0..8{
-                {u32_push(PADD_32BYTES[7-i])}
+            for i in 0..PADD_32BYTES.len(){
+                {u32_push(PADD_32BYTES[PADD_32BYTES.len() - 1 -i])}
+                {env.ptr_insert_in_script(M(MESSAGE_SIZE - 1 - (i as u32)))}
             }
             
             //put the previous state back to stack as [m8,...,m0]
-            for _ in 0..8{
+            for i in 0..8{
                 {u32_fromaltstack()}
+                {env.ptr_insert_in_script(M(MESSAGE_SIZE - (PADD_32BYTES.len() as u32) - 1 - (i as u32)))}
             }
 
             // stack now is: [K32] [XOR_Table] [Message]
@@ -1095,7 +1088,7 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256(chunk_count, & message, repeated_count)}
+            {sha256_debug(chunk_count, & message, repeated_count)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
@@ -1251,7 +1244,7 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256(chunk_count, & message, 1)}
+            {sha256_debug(chunk_count, & message, 1)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
@@ -1293,7 +1286,7 @@ mod tests {
         assert_eq!( msg_len % 512, 0);
         let chunk_count = (msg_len / 512) as u32;
         let script = script! {
-            {sha256(chunk_count, & message, 1)}
+            {sha256_debug(chunk_count, & message, 1)}
             for i in 0..8{
                 {u32_push(hash_out[i])}
                 {u32_equalverify()}
