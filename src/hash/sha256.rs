@@ -606,6 +606,7 @@ fn calc_Wi(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
         {u32_add(n_mi16 - 1, 0)}
         // stack: h g f e d c b a  | 'S0+S1+w9+w[i16]' 
     };
+    println!("calc_Wi env: {:?}", env);
 
     script
 }
@@ -630,7 +631,7 @@ fn calc_Wi_debug(env: &mut Env, i: u32, i16: u32, delta: u32) -> Script {
         {env.ptr_insert_in_script(M(i16))}
         // env: M(15):x+15, M(14):x+14,...,...,M(1):x+2, M:(0):x+1, M(i16):x+i16
     };
-
+    println!("DEBUG calc_Wi env: {:?}", env);
     script
 }
 
@@ -678,7 +679,7 @@ fn compress(env: &mut Env, ap: u32) -> Script {
         /////////////DEBUG
 
         for i in 0..16{ //16
-            {round(env, ap, i, i & 0xF)}
+            {round_debug(env, ap, i, i & 0xF)}
         }
 
         for i in 16..64{ //64
@@ -689,18 +690,16 @@ fn compress(env: &mut Env, ap: u32) -> Script {
             // stack: h g f e d c b a | S0 S1 
             
             {calc_Wi_debug(env, i, i & 0xF, 2)}
-            //{calc_Wi(env, i, i & 0xF, 2)}
-            
+            /*{calc_Wi(env, i, i & 0xF, 2)}
             //now 1 more element on stack
             // stack: h g f e d c b a | t3
-            //{save_wi16_swap(env, M(i & 0xF), 1)}
+            {save_wi16_swap(env, M(i & 0xF), 1)}*/
             
             //now no additional elements on stack
             // stack: h g f e d c b a wi16
-            {round(env, ap, i, i & 0xF)}
+            {round_debug(env, ap, i, i & 0xF)}
         }
 
-        //{final_add()}
         {final_add_debug(env)}
     }
 }
