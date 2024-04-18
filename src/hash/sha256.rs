@@ -535,11 +535,11 @@ pub fn round_debug(env: &mut Env, ap: u32, i: u32, i16: u32) -> Script {
     script
 }
 
-fn copy_state_to_altstack() -> Script {
+fn copy_state_to_altstack(env: &mut Env) -> Script {
     script!(
         for i in 0..INITIAL_STATE_SIZE {
             // stack: h g f e d c b a [STATE_TO_TOP_SIZE]
-            {u32_pick(i + STATE_TO_TOP_SIZE)}
+            {u32_pick(env.ptr(S(i)))}
             {u32_toaltstack()} //alt: a b c d e f g h
         }
     )
@@ -723,7 +723,7 @@ fn save_wi16_swap(env: &mut Env, m: Ptr, delta: u32) -> Script {
     script
 }
 
-pub fn stack_initial(main_msg: &mut [u8], alt_msg: Vec<&[u8]>) -> Script {
+pub fn stack_initial(env: &mut Env, main_msg: &mut [u8], alt_msg: Vec<&[u8]>) -> Script {
     script! {
         // Initialize K32 const
         {push_K32()}
@@ -741,7 +741,7 @@ pub fn stack_initial(main_msg: &mut [u8], alt_msg: Vec<&[u8]>) -> Script {
         // Push the initial Block state onto the stack
         {initial_state()}
 
-        {copy_state_to_altstack()} //copy initial block state to alt stack
+        {copy_state_to_altstack(env)} //copy initial block state to alt stack
     }
 }
 
@@ -756,7 +756,7 @@ pub fn sha256(chunk_count: u32, message: &[u8], repeated_count: u32) -> Script {
     let alt_message: Vec<&[u8]> = message_array[1..].to_vec();
     let script = script! {
         // put all initial data to stack
-        {stack_initial(&mut first_chunk, alt_message)}
+        {stack_initial(&mut env, &mut first_chunk, alt_message)}
         // stack now is: [K32] [XOR_Table] [Message] [State]
         // Perform a round of SHA256
         {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
@@ -789,7 +789,7 @@ pub fn sha256(chunk_count: u32, message: &[u8], repeated_count: u32) -> Script {
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: [uncompressed rest Message]
             // copy previous block state to alt stack
-            {copy_state_to_altstack()}
+            {copy_state_to_altstack(&mut env)}
 
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: [uncompressed rest Message] [State]
@@ -829,7 +829,7 @@ pub fn sha256(chunk_count: u32, message: &[u8], repeated_count: u32) -> Script {
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: []
             // copy previous block state to alt stack
-            {copy_state_to_altstack()}
+            {copy_state_to_altstack(&mut env)}
 
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: [State]
@@ -871,7 +871,7 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
     let alt_message: Vec<&[u8]> = message_array[1..].to_vec();
     let script = script! {
         // put all initial data to stack
-        {stack_initial(&mut first_chunk, alt_message)}
+        {stack_initial(&mut env, &mut first_chunk, alt_message)}
         // stack now is: [K32] [XOR_Table] [Message] [State]
         // Perform a round of SHA256
         {compress(&mut env, XOR_TABLE_TO_TOP_SIZE)}
@@ -879,32 +879,37 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
         // stack now is: [K32] [XOR_Table] [Message] [State]
         for _ in 1..chunk_count{
             // put the previous state to alt stack
-            for _ in 0..8{
+            /*for _ in 0..8{
                 {u32_toaltstack()}
             }
             //drop the previous message chunk
             for _ in 0..MESSAGE_SIZE {
                 {u32_drop()}
+            }*/
+            for i in 0..MESSAGE_SIZE {
+                {u32_roll(env.ptr_extract(M(i)))}
+                {u32_drop()}
             }
 
-            //put the previous state back to stack
+            /*//put the previous state back to stack
             for _ in 0..8{
                 {u32_fromaltstack()}
-            }
+            }*/
 
-            for _ in 0..MESSAGE_SIZE {
+            for i in 0..MESSAGE_SIZE {
                 {u32_fromaltstack()}
+                {env.ptr_insert_in_script(M(MESSAGE_SIZE - 1 - i))}
             }
 
             // stack now is: [K32] [XOR_Table] [State] [Message]
-            for _ in 0..INITIAL_STATE_SIZE{
+            /*for _ in 0..INITIAL_STATE_SIZE{
                 {u32_roll(MESSAGE_SIZE+INITIAL_STATE_SIZE-1)}
-            }
+            }*/
 
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: [uncompressed rest Message]
             // copy previous block state to alt stack
-            {copy_state_to_altstack()}
+            {copy_state_to_altstack(&mut env)}
 
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: [uncompressed rest Message] [State]
@@ -944,7 +949,7 @@ pub fn sha256_debug(chunk_count: u32, message: &[u8], repeated_count: u32) -> Sc
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: []
             // copy previous block state to alt stack
-            {copy_state_to_altstack()}
+            {copy_state_to_altstack(&mut env)}
 
             // stack now is: [K32] [XOR_Table] [Message] [State]
             // alt stack: [State]
